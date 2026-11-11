@@ -41,13 +41,20 @@ All matching reasons appear in the label, e.g. `🔴 PROD · kube eks-prod-east,
 ### Install
 
 1. Copy [`prod-highlight.zsh`](prod-highlight.zsh) to `~/.config/rex/prod-highlight.zsh`, or point the `source` line below at your clone of this repo.
-2. Add this line to the **end** of `~/.zshrc`, after Powerlevel10k is loaded:
+2. Add the `source` line to the **end** of `~/.zshrc`, after Powerlevel10k is loaded. This step is required: without it, nothing gets labelled or coloured. One way to append it:
 
    ```zsh
+   cp ~/.zshrc ~/.zshrc.bak
+   cat >> ~/.zshrc <<'EOF'
+
+   # Rex: context-coded panes (PROD / SUDO / local). Keep after p10k is loaded.
    [[ -r ~/.config/rex/prod-highlight.zsh ]] && source ~/.config/rex/prod-highlight.zsh
+   EOF
    ```
 
-3. Open a new pane. In panes that are already open, run the `source` line once.
+3. Open a new pane, or run `exec zsh` in panes that are already open. A new pane should be labelled `💻 local · <dir>`.
+
+   To confirm the hook is loaded, run `print -l $precmd_functions` in a pane. It should list `_rex_prod_precmd` before `_p9k_precmd`.
 
 ### Customise
 
@@ -77,3 +84,13 @@ REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colours...)   # yellow text pale
 - **SSH detection is by host name only.** What you do on the remote machine isn't inspected, and the remote shell doesn't run this hook.
 - **Only zsh shell panes are covered.** Panes started directly with a program, such as `rex run -- top`, aren't labelled.
 - **Manual labels get overwritten.** A label you set by hand is replaced the next time the context changes.
+
+### Troubleshooting
+
+**A pane isn't labelled or coloured at all.** The hook isn't loaded in that shell. Check that the `source` line is in `~/.zshrc` with `grep prod-highlight ~/.zshrc`. Then run `exec zsh` in that pane, or open a new one. A shell that was already running when you added the line doesn't pick it up on its own.
+
+**A root shell (`sudo su -`, `sudo -i`) isn't yellow.** Make sure the root shell was started from a zsh that has the hook loaded (see above). Exit the root shell, run `exec zsh`, then start it again.
+
+**Do I need to make root's shell zsh (`chsh`)?** No. The hook runs in *your* zsh, just before `sudo` starts. The label and text colours belong to the Rex pane, so they stay in place whatever shell root uses (bash, sh, zsh). Changing root's shell wouldn't help anyway. Root's zsh reads root's config, not yours, and `sudo su -` clears `REX_SESSION` and `REX_BLOCK`, which the hook needs to find its pane. When you exit back to your shell, the next prompt restores the normal label and colours.
+
+**A root shell opened some other way isn't marked.** Only a `sudo`, `su` or `doas` command typed in a hooked zsh is detected. A tab started straight into a root shell, or a `su` run from *inside* an existing root shell, won't be marked.
