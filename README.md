@@ -43,6 +43,16 @@ Anything else is **local**.
 
 A name counts as production if it contains `prod`, `prd` or `production` as a separate word, matched case-insensitively. So `db1.prod.example.net`, `acme-prod` and `eks-prod-east` match, but `product` doesn't.
 
+A host also counts as production if it's listed in `~/.config/rex/prod-hosts`, whatever its name. Put one host or glob per line, and start comments with `#`. Matching ignores case, and SSH aliases from `~/.ssh/config` resolve to their real `HostName` with `ssh -G`. Both the hook and the watcher read this file. It stays on your machine, so your internal host names don't end up in this repo:
+
+```
+# ~/.config/rex/prod-hosts
+bastion.example.org
+*.live.example.org
+```
+
+Open a new pane after editing the file (the hook reads it at shell start-up), and run `./install.sh` again to restart the watcher.
+
 | Signal | Where it looks | Hook | Watcher |
 |---|---|---|---|
 | ssh | Target host of an `ssh` / `mosh` command (option arguments such as `-p 22 -i key` are skipped) | ✓ | ✓ (`ssh`, `autossh`) |
@@ -100,6 +110,8 @@ To try the watcher without installing it, run `rex do --all context-watch.lua` i
 REX_PROD_HOST_RE='(^|\.)(prod|prd)[0-9]*\.|^bastion-'   # your real prod host naming
 REX_PROD_NAME_RE='(^|[^[:alnum:]])(prod|prd|production|live)([^[:alnum:]]|$)'
 REX_PROD_DIRS=(~/src/infra/live/* ~/src/deploy/production)
+REX_PROD_HOSTS=(bastion.example.org '*.live.example.org')    # added to ~/.config/rex/prod-hosts
+REX_PROD_HOSTS_FILE=~/somewhere/else/prod-hosts             # default ~/.config/rex/prod-hosts
 REX_LOCAL_HOSTS=(my-mac devbox)                         # short hostnames that count as local
 REX_PROD_FG='#ffd7d7';  REX_PROD_PALETTE=(...16 colours...)   # red text palette
 REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colours...)   # yellow text palette
@@ -109,6 +121,7 @@ REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colours...)   # yellow text pale
 
 **Watcher:** edit the tables at the top of `context-watch.lua`, then run `./install.sh` again:
 - `PROD_WORDS`: words that mark a host as production. Keep these in step with `REX_PROD_NAME_RE`.
+- Specific production hosts go in `~/.config/rex/prod-hosts` (see [What counts as production](#what-counts-as-production)), not in the script.
 - `REMOTE_ALWAYS` and `REMOTE_SUBCOMMANDS`: which programs count as a remote session.
 
 ### How it works

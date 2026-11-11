@@ -19,6 +19,11 @@
 # Override any of these before sourcing this file (e.g. in ~/.zshrc):
 #   REX_PROD_NAME_RE  regex for prod-looking names (case-insensitive)
 #   REX_PROD_HOST_RE  regex for prod SSH hosts (defaults to REX_PROD_NAME_RE)
+#   REX_PROD_HOSTS    array of hosts or globs that are prod whatever their name,
+#                     e.g. (bastion.example.org '*.live.example.org'). Lines from
+#                     REX_PROD_HOSTS_FILE (default ~/.config/rex/prod-hosts, one
+#                     per line, # comments) are added; context-watch.lua reads
+#                     the same file. SSH aliases are resolved with `ssh -G`.
 #   REX_PROD_DIRS     array of extra directory globs, e.g. (~/src/infra/live/*)
 #   REX_LOCAL_HOSTS   array of short hostnames that count as local. When unset,
 #                     macOS counts as local and anything else as remote. A shell
@@ -31,6 +36,18 @@
 : ${REX_PROD_NAME_RE:='(^|[^[:alnum:]])(prod|prd|production)([^[:alnum:]]|$)'}
 : ${REX_PROD_HOST_RE:=$REX_PROD_NAME_RE}
 (( ${+REX_PROD_DIRS} )) || typeset -ga REX_PROD_DIRS=()
+(( ${+REX_PROD_HOSTS} )) || typeset -ga REX_PROD_HOSTS=()
+: ${REX_PROD_HOSTS_FILE:=${XDG_CONFIG_HOME:-$HOME/.config}/rex/prod-hosts}
+
+_rex_prod_load_hosts() {
+  [[ -r $REX_PROD_HOSTS_FILE ]] || return
+  local line
+  while IFS= read -r line || [[ -n $line ]]; do
+    line=${${line%%\#*}//[[:space:]]/}
+    [[ -n $line ]] && REX_PROD_HOSTS+=(${(L)line})
+  done < $REX_PROD_HOSTS_FILE
+}
+_rex_prod_load_hosts
 
 typeset -g REX_PROD_REASON=''   # read by the p10k segment
 typeset -g _rex_prod_last_label=''
@@ -91,15 +108,29 @@ _rex_prod_ssh_target() {  # host an ssh/mosh command line connects to, or nothin
   done
 }
 
+_rex_prod_host_named() {  # $1 = host; true if its name or REX_PROD_HOSTS mark it prod
+  local h=${(L)1} p
+  _rex_prod_matches $REX_PROD_HOST_RE $h && return 0
+  for p in $REX_PROD_HOSTS; do [[ $h == ${~p} ]] && return 0; done
+  return 1
+}
+
+_rex_prod_is_prod_host() {  # $1 = ssh target, possibly an ~/.ssh/config alias
+  _rex_prod_host_named $1 && return 0
+  (( $+commands[ssh] )) || return 1
+  local real=${${(M)${(f)"$(ssh -G $1 2>/dev/null)"}:#hostname *}#hostname }
+  [[ -n $real && ${(L)real} != ${(L)1} ]] && _rex_prod_host_named $real
+}
+
 _rex_prod_reasons() {  # $1 = optional command about to run
   local -a reasons=()
   local v g
 
   local target=$(_rex_prod_ssh_target "$1")
-  [[ -n $target ]] && _rex_prod_matches $REX_PROD_HOST_RE $target \
-    && reasons+=("ssh $target")
+  [[ -n $target ]] && _rex_prod_is_prod_host $target && reasons+=("ssh $target")
 
-  [[ -n $_rex_prod_remote ]] && _rex_prod_matches $REX_PROD_HOST_RE $_rex_prod_remote \
+  [[ -n $_rex_prod_remote ]] \
+    && { _rex_prod_host_named $_rex_prod_remote || _rex_prod_host_named $HOST; } \
     && reasons+=("host $_rex_prod_remote")
 
   v=$(_rex_prod_kube_context)

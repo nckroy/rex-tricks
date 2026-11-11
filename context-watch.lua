@@ -26,6 +26,28 @@
 -- "product" doesn't). Keep in step with REX_PROD_NAME_RE in the zsh hook.
 local PROD_WORDS = { prod = true, prd = true, production = true }
 
+-- Hosts that are prod whatever their name: one host or glob (* and ?) per line
+-- in ~/.config/rex/prod-hosts, # starts a comment. The zsh hook reads the same
+-- file. Read once at startup; restart the watcher after editing it.
+local PROD_HOSTS_FILE = (os.getenv("XDG_CONFIG_HOME") or ((os.getenv("HOME") or "") .. "/.config"))
+  .. "/rex/prod-hosts"
+
+local function glob_to_pattern(glob)
+  return "^" .. glob:gsub("[%^%$%(%)%%%.%[%]%+%-]", "%%%0"):gsub("%*", ".*"):gsub("%?", ".") .. "$"
+end
+
+local PROD_HOST_PATTERNS = {}
+do
+  local f = io.open(PROD_HOSTS_FILE, "r")
+  if f then
+    for line in f:lines() do
+      line = line:gsub("#.*", ""):gsub("%s+", ""):lower()
+      if line ~= "" then PROD_HOST_PATTERNS[#PROD_HOST_PATTERNS + 1] = glob_to_pattern(line) end
+    end
+    f:close()
+  end
+end
+
 -- Processes that always mean a remote session, and ones that do only with
 -- certain subcommands (checked against the process's arguments).
 local REMOTE_ALWAYS = {
@@ -50,11 +72,30 @@ local function severity(label)
   return 0
 end
 
-local function is_prod(host)
-  for word in host:lower():gmatch("%w+") do
+local function named_prod(host)
+  host = host:lower()
+  for word in host:gmatch("%w+") do
     if PROD_WORDS[word] then return true end
   end
+  for _, pat in ipairs(PROD_HOST_PATTERNS) do
+    if host:find(pat) then return true end
+  end
   return false
+end
+
+-- Also resolves ~/.ssh/config aliases with `ssh -G`; cached per host because
+-- process events fire often.
+local prod_cache = {}
+local function is_prod(host)
+  if prod_cache[host] ~= nil then return prod_cache[host] end
+  local result = named_prod(host)
+  if not result then
+    local r = rex.exec({ "ssh", "-G", host }, { timeout = 2 })
+    local real = r and r.ok and r.stdout:match("\nhostname (%S+)") or r and r.ok and r.stdout:match("^hostname (%S+)")
+    if real and real:lower() ~= host:lower() then result = named_prod(real) end
+  end
+  prod_cache[host] = result
+  return result
 end
 
 local function argv_of(pid)
