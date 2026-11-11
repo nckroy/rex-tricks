@@ -4,11 +4,13 @@
 # Powerlevel10k prompt when the pane is working against production:
 #   🔴 PROD · <reason>   production context (red-shifted text)
 #   🟡 SUDO · <command>  while a sudo/su/doas command runs (yellow-shifted text)
-#   🟢 <host>            ssh/mosh to a non-prod host
+#   🌐 <host>            ssh/mosh to a non-prod host
+#   🌐 <host> · <dir>    this shell itself runs on a remote machine
 #   💻 local · <dir>     anything else
 #
 # Signals checked before every prompt (first match wins, all are listed):
 #   ssh/mosh  - a running ssh/mosh command whose target matches REX_PROD_HOST_RE
+#   host      - this shell runs on a remote host that matches REX_PROD_HOST_RE
 #   kube      - kubectl current-context
 #   aws       - AWS_PROFILE / AWS_VAULT / AWS_DEFAULT_PROFILE
 #   tofu      - TF_WORKSPACE or .terraform/environment in the current directory
@@ -18,6 +20,10 @@
 #   REX_PROD_NAME_RE  regex for prod-looking names (case-insensitive)
 #   REX_PROD_HOST_RE  regex for prod SSH hosts (defaults to REX_PROD_NAME_RE)
 #   REX_PROD_DIRS     array of extra directory globs, e.g. (~/src/infra/live/*)
+#   REX_LOCAL_HOSTS   array of short hostnames that count as local. When unset,
+#                     macOS counts as local and anything else as remote. A shell
+#                     reached over SSH (SSH_CONNECTION/SSH_CLIENT/SSH_TTY) is
+#                     always remote.
 
 [[ -n $REX_BLOCK && -n $REX_SESSION ]] || return 0
 (( $+commands[rex] && $+commands[jq] )) || return 0
@@ -43,6 +49,18 @@ _rex_prod_kube_context() {
     fi
   done < $cfg
 }
+
+_rex_prod_remote_host() {  # short hostname if this shell runs remotely, else nothing
+  local h=${HOST%%.*}
+  if [[ -n $SSH_CONNECTION || -n $SSH_CLIENT || -n $SSH_TTY ]]; then
+    print -r -- $h
+  elif (( ${+REX_LOCAL_HOSTS} )); then
+    (( ${REX_LOCAL_HOSTS[(Ie)$h]} )) || print -r -- $h
+  elif [[ $OSTYPE != darwin* ]]; then
+    print -r -- $h
+  fi
+}
+typeset -g _rex_prod_remote=$(_rex_prod_remote_host)   # fixed for the shell's life
 
 _rex_prod_tofu_workspace() {
   if [[ -n $TF_WORKSPACE ]]; then print -r -- $TF_WORKSPACE
@@ -80,6 +98,9 @@ _rex_prod_reasons() {  # $1 = optional command about to run
   local target=$(_rex_prod_ssh_target "$1")
   [[ -n $target ]] && _rex_prod_matches $REX_PROD_HOST_RE $target \
     && reasons+=("ssh $target")
+
+  [[ -n $_rex_prod_remote ]] && _rex_prod_matches $REX_PROD_HOST_RE $_rex_prod_remote \
+    && reasons+=("host $_rex_prod_remote")
 
   v=$(_rex_prod_kube_context)
   [[ -n $v ]] && _rex_prod_matches $REX_PROD_NAME_RE $v && reasons+=("kube $v")
@@ -173,7 +194,9 @@ _rex_prod_update() {  # $1 = optional command about to run
   elif [[ -n $sudo ]]; then
     _rex_prod_set_label "🟡 SUDO · $sudo"
   elif [[ -n $(_rex_prod_ssh_target "$1") ]]; then
-    _rex_prod_set_label "🟢 $(_rex_prod_ssh_target "$1")"
+    _rex_prod_set_label "🌐 $(_rex_prod_ssh_target "$1")"
+  elif [[ -n $_rex_prod_remote ]]; then
+    _rex_prod_set_label "🌐 $_rex_prod_remote · ${${PWD/#$HOME/~}:t}"
   elif [[ $PWD == $HOME ]]; then
     _rex_prod_set_label "💻 local · ~"
   else
