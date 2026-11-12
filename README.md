@@ -17,12 +17,14 @@ This add-on makes it obvious which Rex panes are working against production, whi
   - remote sessions started through an alias, function or script
   - other remote tools: `kubectl exec`, `docker exec`, `aws ssm`, `tailscale ssh`, `et`, `autossh`
   - root shells in bash, or in panes launched directly into a program
+  - a second SSH hop through a bastion, when the far host's shell reports where it is (see [Through a bastion](#through-a-bastion))
 
 | Context | Pane label | Text colours (hook) | Prompt (hook) |
 |---|---|---|---|
 | Production | `🔴 PROD · kube eks-prod-east`, `🔴 PROD · ssh db1.prod.example` | red-shifted | white-on-red `⚠ PROD …` segment (Powerlevel10k) |
 | Production + sudo | `🔴 PROD · SUDO · dir prod` | red-shifted (prod wins) | as above |
 | Running as root (`sudo` / `su` / `doas`) | `🟡 SUDO · root shell`, `🟡 SUDO · port selfupdate` | yellow-shifted | — |
+| Production host reached through a bastion (watcher) | `🔴 PROD · db1.prod.example via ssh bastion` | theme | — |
 | Remote session started from this pane | `🌐 dev-box`, `🌐 ssh web1.staging`, `🌐 kubectl exec` | theme | — |
 | This shell itself runs on a remote machine | `🌐 devbox · ~/src` | theme | — |
 | Everything else | `💻 local · <dir>` | theme | — |
@@ -42,6 +44,34 @@ A pane counts as **remote** in any of these cases:
 If `REX_LOCAL_HOSTS` isn't set, macOS counts as local and any other OS (for example a Linux or FreeBSD machine you reach as a Rex host) counts as remote. The hook only does this check on a machine where it's installed.
 
 Anything else is **local**.
+
+### Through a bastion
+
+If you `ssh bastion` and then, from the bastion's shell, `ssh db1.prod.example`, the process in the pane is still `ssh bastion`. Neither the hook nor the process tree can see the second hop.
+
+The watcher gets it from the directory reports that shells send with OSC 7 (`file://host/path`). Those pass through any number of SSH hops, and Rex fires `terminal.pwd_changed` for each one. While an SSH session runs in a pane, the watcher treats the host in the latest report as the host the pane is really on:
+
+| You're on | Pane label |
+|---|---|
+| the bastion | unchanged, e.g. `🌐 bastion` |
+| a production host behind it | `🔴 PROD · db1.prod.example via ssh bastion` |
+| any other host behind it | `🌐 web2.staging.example via ssh bastion` |
+
+A host counts as production by the same rules as an `ssh` target: its name, or `~/.config/rex/prod-hosts`. When you're back on the bastion, or the SSH session ends, the label goes back. A report from a shell on this Mac changes nothing.
+
+This only works if the shells on the far side send OSC 7, and many don't by default. To add it, put one of these in the shell start-up file on the bastion **and** on the hosts behind it. If the bastion doesn't report, the pane stays labelled with the last host behind it until you leave the bastion.
+
+```bash
+# bash: ~/.bashrc
+PROMPT_COMMAND='printf "\e]7;file://%s%s\a" "$HOSTNAME" "$PWD"'${PROMPT_COMMAND:+"; $PROMPT_COMMAND"}
+```
+
+```zsh
+# zsh: ~/.zshrc
+_osc7() { printf '\e]7;file://%s%s\a' "$HOST" "$PWD" }; precmd_functions+=(_osc7)
+```
+
+The report has to name the host the way your production rules expect. If a host's short name doesn't look like production, list it in `~/.config/rex/prod-hosts` or report the full name.
 
 ### What counts as production
 
@@ -65,6 +95,7 @@ Open a new pane after editing the file (the hook reads it at shell start-up), an
 | aws | `AWS_PROFILE`, `AWS_VAULT`, `AWS_DEFAULT_PROFILE` | ✓ | |
 | tofu | `TF_WORKSPACE`, or `.terraform/environment` in the current directory | ✓ | |
 | dir | A path component named `prod`, `prd` or `production`, or any glob in `REX_PROD_DIRS` | ✓ | |
+| via | The host in an OSC 7 directory report from the far side of an SSH session ([Through a bastion](#through-a-bastion)) | | ✓ |
 
 The hook lists all matching reasons in the label, e.g. `🔴 PROD · kube eks-prod-east, aws acme-prod`.
 
@@ -133,15 +164,18 @@ REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colours...)   # yellow text pale
 - **Labels:** both parts call the Rex server API `session.set_block_label`.
   - The hook runs the call only when the label changes, which takes about 30 ms. It runs synchronously so that a quick `sudo` can't leave a stale label behind.
   - The watcher reacts to Rex's `terminal.process_changed` event. It reads the foreground process and its parents, with each one's name and user ID, and uses `ps` for an `ssh` command line.
+  - It also reacts to `terminal.pwd_changed`. While an SSH session is the pane's program, the host in that report is the hop the pane is on. The watcher forgets it when that SSH session ends.
 - **No fighting between the two:** the watcher only replaces a label that signals less than its own (🔴 > 🟡 > 🌐 > anything else). When the context ends, it restores the label it replaced, but only if nothing else changed the label in the meantime. So in a hooked zsh, the hook's own labels win.
 - **Text colours (hook only):** the hook prints standard terminal escape sequences. OSC 10 sets the foreground and OSC 4 sets palette entries 0–15. OSC 104 / OSC 110 restore your theme. Only the 16 ANSI colours and the default foreground change, so 256-colour and true-colour output is untouched.
 - **Timing (hook):** a zsh `precmd` hook handles prompt-time state such as directory, kube, AWS and tofu. A `preexec` hook marks `ssh`/`mosh`/`sudo`/`su`/`doas` just before they start, so the label and colours are in place for the password prompt and the whole session. The `precmd` hook is placed before Powerlevel10k's, so the prompt segment always shows the current state.
 
 ### Limitations
 
-- **The background can't be tinted.** Rex currently draws every pane's background from the app theme. It ignores a background set from inside the terminal (OSC 11), and the server's `com.superlogical.terminal.set_theme` method has no visible effect in the Mac app. So the highlight is the label plus the text colours. Per-pane tinting is an open feature request in the Rex Beta Discord ("Support tinting or theming of individual panes").
+- **The hook doesn't tint the background yet.** Since the 2026-11-03 release, Rex draws a background that a program in the pane sets with OSC 11, and `OSC 111` restores the theme. The hook still only recolours the text, so for now the highlight is the label plus the text colours.
+- **The watcher can't tint or recolour anything.** Rex only takes colours from the program in the pane. The server's `com.superlogical.terminal.set_theme` method has no visible effect in the Mac app. `com.superlogical.terminal.write` sends bytes to the program's input, not to the screen. Per-pane tinting from the API is an open feature request in the Rex Beta Discord ("Support tinting or theming of individual panes").
 - **Switching the app theme is all-or-nothing.** The Mac app's `client.theme.change` action recolours every pane, so it isn't used here.
-- **Only the hook can recolour text.** Panes the watcher catches on its own (bash, aliases, panes launched directly into a program) get the label but keep the theme's colours.
+- **Only the hook can recolour text.** Panes the watcher catches on its own (bash, aliases, panes launched directly into a program, and production hosts behind a bastion) get the label but keep the theme's colours.
+- **Hosts behind a bastion are only seen if their shells report OSC 7.** See [Through a bastion](#through-a-bastion). Without a report from the bastion, the label isn't restored when you return to it, only when the SSH session ends.
 - **The watcher only checks hosts for `ssh` and `autossh`.** `mosh-client`, `kubectl exec` and the rest are labelled remote but never PROD, because their command lines don't carry a reliable host name.
 - **sudo is only marked while something runs as root.** There's no SUDO marker for the time afterwards when sudo can run again without a password. Checking that with `sudo -n` would write an entry to the system log each time.
 - **Remote work is identified by host name or program, not content.** What you do on the remote machine isn't inspected. A Rex host only gets the hook's checks if the hook is installed there too, and the watcher only sees panes on the server it runs against (your Mac).

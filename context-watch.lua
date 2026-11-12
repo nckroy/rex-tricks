@@ -10,6 +10,10 @@
 --     exec/attach/run, aws ssm, tailscale ssh)
 --   * root shells and sudo in any shell, including bash, and in panes
 --     started directly with a program
+--   * a second hop through a bastion: while an ssh session runs, a shell on
+--     the far side that reports its directory (OSC 7, file://host/path) names
+--     the host the pane is really on, so "ssh bastion" then "ssh db1.prod"
+--     is labelled PROD
 --
 -- Labels use the same scheme as the hook:
 --   🔴 PROD · …   remote target looks like production
@@ -122,30 +126,39 @@ local function ssh_host(argv)
   end
 end
 
+-- Host named by an OSC 7 directory report (file://host/path), or nil.
+local function pwd_host(pwd)
+  local host = type(pwd) == "string" and pwd:match("^file://([^/]+)")
+  if host and host ~= "" then return host:lower() end
+end
+
+local function short(host) return (host or ""):lower():match("^[^.]*") end
+
 -- Describe a remote session for one process, or nil.
 local function remote_of(p)
   local name = p.name or ""
   if REMOTE_ALWAYS[name] then
     if name == "ssh" or name == "autossh" then
       local host = ssh_host(argv_of(p.pid))
-      if host then return { host = host, what = "ssh " .. host } end
-      return { what = name }
+      if host then return { pid = p.pid, host = host, what = "ssh " .. host } end
+      return { pid = p.pid, what = name }
     end
-    if name == "session-manager-plugin" then return { what = "aws ssm" } end
-    if name == "mosh-client" then return { what = "mosh" } end
-    return { what = name }
+    if name == "session-manager-plugin" then return { pid = p.pid, what = "aws ssm" } end
+    if name == "mosh-client" then return { pid = p.pid, what = "mosh" } end
+    return { pid = p.pid, what = name }
   end
   local subs = REMOTE_SUBCOMMANDS[name]
   if subs then
     local argv = argv_of(p.pid)
     for i = 2, #argv do
-      if subs[argv[i]] then return { what = name .. " " .. argv[i] } end
+      if subs[argv[i]] then return { pid = p.pid, what = name .. " " .. argv[i] } end
     end
   end
 end
 
--- What the pane is doing: { sev = 0..3, label = "…" }.
-local function classify(ev)
+-- What the pane is doing: { sev = 0..3, label = "…", remote = {…} or nil }.
+-- nested is the host the far side last reported with OSC 7, or nil.
+local function classify(ev, nested)
   local chain = {}
   -- ancestors are listed nearest first; walk from the terminal's child out to
   -- the foreground process. Skip login, which always runs as root.
@@ -174,13 +187,20 @@ local function classify(ev)
     sudo_what = fgname
   end
 
-  if remote and remote.host and is_prod(remote.host) then
-    return { sev = 3, label = "🔴 PROD" .. (sudo and " · SUDO" or "") .. " · " .. remote.what }
+  -- A reported host other than the first hop means a further hop (a bastion).
+  local via
+  if remote and nested and short(nested) ~= short(remote.host) then via = nested end
+
+  if remote and ((via and is_prod(via)) or (not via and remote.host and is_prod(remote.host))) then
+    local where = via and (via .. " via " .. remote.what) or remote.what
+    return { sev = 3, remote = remote, via = via, label = "🔴 PROD" .. (sudo and " · SUDO" or "") .. " · " .. where }
   end
   if sudo then
-    return { sev = 2, label = "🟡 SUDO · " .. sudo_what .. (remote and (" · " .. remote.what) or "") }
+    return { sev = 2, remote = remote, label = "🟡 SUDO · " .. sudo_what .. (remote and (" · " .. remote.what) or "") }
   end
-  if remote then return { sev = 1, label = "🌐 " .. remote.what } end
+  if remote then
+    return { sev = 1, remote = remote, via = via, label = "🌐 " .. (via and (via .. " via " .. remote.what) or remote.what) }
+  end
   return { sev = 0 }
 end
 
@@ -205,15 +225,20 @@ end
 
 -- Per block: the label this watcher set, and the one it replaced.
 local mine = {}
+-- Per block: the last process event, and the host the current remote session
+-- last reported with OSC 7 (forgotten when that session ends).
+local last_ev, nested = {}, {}
 
-rex.on("terminal.process_changed", function(ctx, ev)
-  local c = classify(ev)
+local function apply(ctx, c)
   local cur = current_label(ctx)
   local st = mine[ctx.block_id]
   local owned = st and cur == st.set
 
   if c.sev > 0 then
-    if owned then
+    if owned and not c.via and st.prev and c.sev <= severity(st.prev) then
+      -- Back on the first hop and no stronger than the label we replaced: hand it back.
+      set_label(ctx, st.prev); mine[ctx.block_id] = nil
+    elseif owned then
       if c.label ~= cur then set_label(ctx, c.label); st.set = c.label end
     elseif c.sev > severity(cur) then
       mine[ctx.block_id] = { set = c.label, prev = cur }
@@ -223,8 +248,31 @@ rex.on("terminal.process_changed", function(ctx, ev)
     if owned then set_label(ctx, st.prev or "") end
     mine[ctx.block_id] = nil
   end
+end
+
+rex.on("terminal.process_changed", function(ctx, ev)
+  last_ev[ctx.block_id] = ev
+  local n = nested[ctx.block_id]
+  local c = classify(ev, n and n.host)
+  -- A different (or no) remote session: forget what the old one reported.
+  if not c.remote or not n or n.pid ~= c.remote.pid then
+    nested[ctx.block_id] = nil
+    c = classify(ev, nil)
+  end
+  apply(ctx, c)
+end)
+
+rex.on("terminal.pwd_changed", function(ctx, ev)
+  local ev_p = last_ev[ctx.block_id]
+  local host = pwd_host(ev and ev.pwd)
+  if not ev_p or not host then return end
+  local c = classify(ev_p, nil)
+  if not c.remote then return end          -- a local shell reporting its own directory
+  nested[ctx.block_id] = { pid = c.remote.pid, host = host }
+  apply(ctx, classify(ev_p, host))
 end)
 
 rex.on("block_closed", function(ctx, ev)
-  mine[ev.block_id or ctx.block_id or ""] = nil
+  local id = ev.block_id or ctx.block_id or ""
+  mine[id], last_ev[id], nested[id] = nil, nil, nil
 end)
