@@ -169,6 +169,10 @@ When you start [Claude Code](https://claude.com/claude-code) in a Rex pane, this
 
 The pane opens from a Claude Code `SessionStart` hook with the `startup` matcher, so it fires when a new `claude` session starts, not on resume or `/clear`. The hook script checks for `$REX_SESSION` and `$REX_BLOCK`, so outside Rex it does nothing. It reads `session_id` from the hook's JSON on stdin and runs `rex split --split=right --focus=false` to open the pane without taking focus from Claude. Because `rex split --ratio` doesn't take effect, it then moves the border with the server API `session.resize_pane`, so that the pane is about 83 columns wide. The hook always exits 0 and has a 10-second timeout, so it can't block or break Claude's start-up.
 
+The `session_id` the hook receives isn't always the id of the transcript the conversation writes to: a conversation can keep writing to an earlier transcript (logged as `sessionId`) while each record also carries the running process's id (logged as `session_id`). The report matches either one. When they differ, the header shows both, for example `b69955af… (transcript 30ee408f)`.
+
+The report fits itself to the pane. It reads the width from the pane's terminal (`/dev/tty`), because the refresh loop captures its output, then falls back to `$COLUMNS` and then to 80. Set `USAGE_WIDTH` to force a width. Dividers, bars and the sparkline scale between 40 and 120 columns, the notes rewrap, and any line still too long is cut with `…`. A resized pane catches up on the next refresh.
+
 ### Requirements
 
 - Rex on macOS with the `rex` CLI on `PATH`, Claude Code, `python3` and `jq`.

@@ -8,7 +8,7 @@ reconstructed the way ccusage does it: a block starts at the hour floor of the f
 message after a 5h+ gap and lasts 5 hours. This is an estimate from local logs; it is
 not Anthropic's server-side limit meter (run /usage in Claude Code for that).
 """
-import json, sys, glob, os
+import json, sys, glob, os, re, builtins, textwrap
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
@@ -17,7 +17,27 @@ ROOT = os.path.expanduser("~/.claude/projects")
 HOME_SLUG = os.path.expanduser("~").replace("/", "-")  # how Claude Code names project dirs, e.g. -Users-me
 NOW = datetime.now(timezone.utc)
 LOCAL = datetime.now().astimezone().tzinfo
-W = 80
+
+
+def term_width():
+    # The loop captures stdout with $(...), so stdout isn't the terminal; ask the pane's tty.
+    if os.environ.get("USAGE_WIDTH", "").isdigit():
+        return int(os.environ["USAGE_WIDTH"])
+    try:
+        with open("/dev/tty") as tty:
+            return os.get_terminal_size(tty.fileno()).columns
+    except OSError:
+        pass
+    if os.environ.get("COLUMNS", "").isdigit():
+        return int(os.environ["COLUMNS"])
+    return 80
+
+
+W = max(40, min(term_width(), 120))
+BAR = max(10, min(40, W - 30))    # hourly output bars
+BAR5 = max(10, min(60, W - 8))    # 5-hour window bar
+SPK = max(10, min(40, W - 30))    # context sparkline
+MODW = max(12, min(28, W - 52))   # model-name column
 NO_COLOR = bool(os.environ.get("NO_COLOR"))
 
 
@@ -32,6 +52,26 @@ def DIM(t): return c("2", t)        # secondary text
 
 
 RULE = DIM("─" * W)
+ANSI = re.compile(r"\033\[[0-9;]*m")
+
+
+def fit(line):
+    # Cut a line to W visible columns, skipping color codes; mark the cut with "…".
+    plain = ANSI.sub("", line)
+    if len(plain) <= W:
+        return line
+    out, vis, i = [], 0, 0
+    while i < len(line) and vis < W - 1:
+        m = ANSI.match(line, i)
+        if m:
+            out.append(m.group()); i = m.end(); continue
+        out.append(line[i]); vis += 1; i += 1
+    return "".join(out) + ("" if NO_COLOR else "\033[0m") + "…"
+
+
+def print(*args, **kw):
+    text = kw.pop("sep", " ").join(str(a) for a in args)
+    builtins.print("\n".join(fit(l) for l in text.split("\n")), **kw)
 ROW_COLORS = {
     "Input (uncached)": "35", "Cache writes": "33", "Cache reads": "34",
     "Output": "32", "  of which thinking": "2;32", "Total tokens": "1;97",
@@ -68,6 +108,10 @@ def load():
                 entries.append({
                     "t": ts(d["timestamp"]),
                     "session": d.get("sessionId") or os.path.basename(fpath).split(".")[0],
+                    # A resumed conversation keeps writing to its original transcript (sessionId),
+                    # but the new process's id, which is what the SessionStart hook receives, is
+                    # logged as session_id. Keep both so either one finds the records.
+                    "alt": d.get("session_id") or "",
                     "file": fpath,
                     "side": bool(d.get("isSidechain")),
                     "model": m.get("model") or "?",
@@ -173,8 +217,13 @@ print(c("1;97;45", title.center(W)))
 print(RULE)
 
 # ---- this session
-sess = [e for e in entries if SESSION and (e["session"] == SESSION or SESSION in e["file"])]
-print("\n" + H("THIS SESSION") + "  " + DIM(SESSION[:8] + "…"))
+def mine(e):
+    return bool(SESSION) and (SESSION in (e["session"], e["alt"]) or SESSION in e["file"])
+
+
+sess = [e for e in entries if mine(e)]
+convs = sorted({e["session"] for e in sess} - {SESSION})
+print("\n" + H("THIS SESSION") + "  " + DIM(SESSION[:8] + "…" + (" (transcript " + ", ".join(x[:8] for x in convs) + ")" if convs else "")))
 if sess:
     side = [e for e in sess if e["side"]]
     span = hm(sess[-1]["t"] - sess[0]["t"])
@@ -192,7 +241,7 @@ if sess:
     print(row("At first request", f(cs["first"]), "2;96"))
     if cs["compactions"]:
         print(row("Likely compactions", str(cs["compactions"]), "1;33"))
-    print("    " + c("96", spark(cs["series"])) + DIM("  growth over the session"))
+    print("    " + c("96", spark(cs["series"], SPK)) + DIM("  growth over the session"))
     print(DIM("    /context in Claude Code shows this as a % of the model's window."))
     by_model = defaultdict(list)
     for e in sess:
@@ -200,7 +249,7 @@ if sess:
     print("\n  " + H("By model"))
     for mname, its in sorted(by_model.items(), key=lambda kv: -len(kv[1])):
         tt = tot(its)
-        print("    " + c("95", mname.ljust(28)) + NUM(f(tt["n"]).rjust(6)) + DIM(" req  ")
+        print("    " + c("95", (mname if len(mname) <= MODW else mname[:MODW - 1] + "…").ljust(MODW)) + NUM(f(tt["n"]).rjust(6)) + DIM(" req  ")
               + c("32", f(tt["out"]).rjust(10)) + DIM(" out  ") + NUM(f(tt["all"]).rjust(13)) + DIM(" total"))
     if side:
         print("\n  " + LBL("Subagent (sidechain) requests:") + " " + NUM(f(len(side))) + DIM(" · ") + NUM(f(tot(side)["all"])) + DIM(" tokens"))
@@ -210,7 +259,7 @@ if sess:
         hours[e["t"].astimezone(LOCAL).strftime("%H:00")] += e["out"]
     peak = max(hours.values()) or 1
     for h, v in sorted(hours.items()):
-        print("    " + LBL(h) + "  " + c("32", "█" * int(round(v / peak * 40))) + DIM("░" * (40 - int(round(v / peak * 40)))) + " " + NUM(f(v)))
+        print("    " + LBL(h) + "  " + c("32", "█" * int(round(v / peak * BAR))) + DIM("░" * (BAR - int(round(v / peak * BAR)))) + " " + NUM(f(v)))
     print("\n  " + H("Largest context additions") + DIM(" (cache write + uncached input)"))
     for e in sorted(sess, key=lambda e: -(e["cw"] + e["in"]))[:3]:
         print("    " + LBL(loc(e["t"])) + "  " + c("33", f(e["cw"] + e["in"]).rjust(10)) + DIM(" tokens"))
@@ -228,7 +277,7 @@ if active:
     frac = el / timedelta(hours=5)
     print("  " + LBL("Window:") + " " + NUM(loc(start)) + " → " + NUM(loc(end)) + "   " + LBL("elapsed ") + NUM(hm(el))
           + DIM(" · ") + LBL("remaining ") + c("1;32" if rem > timedelta(hours=1) else "1;31", hm(rem)))
-    print("  " + bar(frac, 60) + " " + NUM(f"{frac:.0%}"))
+    print("  " + bar(frac, BAR5) + " " + NUM(f"{frac:.0%}"))
     t = tot(active["items"])
     print(table(t))
     mins = max(1, (active["items"][-1]["t"] - active["items"][0]["t"]).total_seconds() / 60)
@@ -243,7 +292,7 @@ if active:
     for sid, its in sorted(per.items(), key=lambda kv: -tot(kv[1])["all"]):
         tt = tot(its)
         proj = os.path.basename(os.path.dirname(its[0]["file"])).replace(HOME_SLUG, "~").replace("-", "/") or "?"
-        mark = c("1;35", "  ← this session") if sid == SESSION else ""
+        mark = c("1;35", "  ← this session") if any(mine(e) for e in its) else ""
         cnow = context_stats(its)["now"]
         print("    " + c("36", sid[:8]) + "  " + NUM(f(tt["n"]).rjust(5)) + DIM(" req ") + NUM(f(tt["all"]).rjust(12))
               + DIM(" tok ") + c("96", f(cnow).rjust(8)) + DIM(" ctx  ") + LBL(proj[:16]) + mark)
@@ -255,10 +304,9 @@ if len(bl) > 1:
           + NUM(loc(prev["end"])) + DIM(" · ") + NUM(f(tot(prev["items"])["all"])) + DIM(" tokens"))
 
 print("\n" + RULE)
-for line in (
-    "  Notes: counts come from the local session logs on this Mac only (usage on",
-    "  other machines or claude.ai isn't included). Anthropic doesn't publish the",
-    "  plan limit in tokens, so this can't show % of your limit. Run /usage in",
-    "  Claude Code for the server's own limit status. Refreshes every 30 s.",
-):
-    print(DIM(line))
+NOTE = ("Notes: counts come from the local session logs on this Mac only (usage on "
+        "other machines or claude.ai isn't included). Anthropic doesn't publish the "
+        "plan limit in tokens, so this can't show % of your limit. Run /usage in "
+        "Claude Code for the server's own limit status. Refreshes every 30 s.")
+for line in textwrap.wrap(NOTE, W - 2):
+    print(DIM("  " + line))
