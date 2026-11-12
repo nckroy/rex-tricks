@@ -57,7 +57,7 @@ The watcher gets it from the directory reports that shells send with OSC 7 (`fil
 | a production host behind it | `🔴 PROD · db1.prod.example via ssh bastion` |
 | any other host behind it | `🌐 web2.staging.example via ssh bastion` |
 
-A host counts as production by the same rules as an `ssh` target: its name, or `~/.config/rex/prod-hosts`. When you're back on the bastion, or the SSH session ends, the label goes back. A report from a shell on this Mac changes nothing.
+A host counts as production by the same rules as an `ssh` target: its name, or `~/.config/rex/prod-hosts`. When you're back on the bastion, or the SSH session ends, the label goes back. The bastion counts as itself whether it reports the name you typed after `ssh` or the real host name an alias in `~/.ssh/config` stands for (resolved with `ssh -G`, using the session's own options). A report from a shell on this Mac changes nothing.
 
 This only works if the shells on the far side send OSC 7, and many don't by default. To add it, put one of these in the shell start-up file on the bastion **and** on the hosts behind it. If the bastion doesn't report, the pane stays labelled with the last host behind it until you leave the bastion.
 

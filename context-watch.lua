@@ -111,7 +111,7 @@ local function argv_of(pid)
 end
 
 -- Target host of an ssh command line: the first non-option word, skipping the
--- arguments of options that take one.
+-- arguments of options that take one. Also returns the options before it.
 local SSH_OPTS_WITH_ARG = "bcDEeFIiJLlmOoPpQRSWw"
 local function ssh_host(argv)
   local i = 2
@@ -120,10 +120,29 @@ local function ssh_host(argv)
     if w:sub(1, 1) == "-" then
       if #w == 2 and SSH_OPTS_WITH_ARG:find(w:sub(2, 2), 1, true) then i = i + 1 end
     else
-      return (w:gsub("^ssh://", ""):gsub("^.*@", ""))
+      local opts = {}
+      for j = 2, i - 1 do opts[#opts + 1] = argv[j] end
+      return (w:gsub("^ssh://", ""):gsub("^.*@", "")), opts
     end
     i = i + 1
   end
+end
+
+-- The host an ssh target really connects to, from `ssh -G` with the session's
+-- own options, so ~/.ssh/config aliases, -F and -o HostName= all count.
+-- Lower-cased; nil if it can't be resolved. Cached per command line.
+local real_cache = {}
+local function ssh_real(host, opts)
+  local key = table.concat(opts or {}, "\0") .. "\0" .. host
+  if real_cache[key] == nil then
+    local cmd = { "ssh", "-G" }
+    for _, o in ipairs(opts or {}) do cmd[#cmd + 1] = o end
+    cmd[#cmd + 1] = host
+    local r = rex.exec(cmd, { timeout = 2 })
+    local real = r and r.ok and (r.stdout:match("\nhostname (%S+)") or r.stdout:match("^hostname (%S+)"))
+    real_cache[key] = real and real:lower() or false
+  end
+  return real_cache[key] or nil
 end
 
 -- Host named by an OSC 7 directory report (file://host/path), or nil.
@@ -134,13 +153,20 @@ end
 
 local function short(host) return (host or ""):lower():match("^[^.]*") end
 
+-- Is a reported host the first hop itself? It may report the name typed after
+-- ssh, or the real host name an alias stands for.
+local function is_first_hop(reported, remote)
+  local s = short(reported)
+  return s == short(remote.host) or (remote.real ~= nil and s == short(remote.real))
+end
+
 -- Describe a remote session for one process, or nil.
 local function remote_of(p)
   local name = p.name or ""
   if REMOTE_ALWAYS[name] then
     if name == "ssh" or name == "autossh" then
-      local host = ssh_host(argv_of(p.pid))
-      if host then return { pid = p.pid, host = host, what = "ssh " .. host } end
+      local host, opts = ssh_host(argv_of(p.pid))
+      if host then return { pid = p.pid, host = host, real = ssh_real(host, opts), what = "ssh " .. host } end
       return { pid = p.pid, what = name }
     end
     if name == "session-manager-plugin" then return { pid = p.pid, what = "aws ssm" } end
@@ -189,7 +215,7 @@ local function classify(ev, nested)
 
   -- A reported host other than the first hop means a further hop (a bastion).
   local via
-  if remote and nested and short(nested) ~= short(remote.host) then via = nested end
+  if remote and nested and not is_first_hop(nested, remote) then via = nested end
 
   if remote and ((via and is_prod(via)) or (not via and remote.host and is_prod(remote.host))) then
     local where = via and (via .. " via " .. remote.what) or remote.what
