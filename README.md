@@ -2,6 +2,10 @@
 
 Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal.
 
+![A Rex window with six context-coded panes and the Claude usage pane. Pane labels read: PROD · kube eks-prod-east, aws acme-prod, dir prod (with the red PROD prompt segment); PROD · ssh db1.prod.example.net; SUDO · port selfupdate; web1.staging.example.net (remote); local · rex-tricks; and PROD · SUDO · dir prod. The right-hand pane shows the Claude usage report.](docs/demo.png)
+
+*Left to right, top to bottom: a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, SSH to a production host, a `sudo` command, SSH to a non-production host, an ordinary local pane, and `sudo` inside a production directory. On the right is the [Claude usage pane](#claude-usage-pane). Host names are examples.*
+
 ## Context-coded panes: PROD, SUDO, remote and local
 
 Files: [`prod-highlight.zsh`](prod-highlight.zsh) (zsh hook), [`context-watch.lua`](context-watch.lua) (process watcher), [`install.sh`](install.sh)
