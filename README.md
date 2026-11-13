@@ -2,9 +2,9 @@
 
 Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on macOS.
 
-![A Rex window with six context-coded panes and the Claude usage pane. Pane labels read: PROD · kube eks-prod-east, aws acme-prod, dir prod (with the red PROD prompt segment); PROD · ssh db1.prod.example.net; SUDO · port selfupdate; web1.staging.example.net (remote); local · rex-tricks; and PROD · SUDO · dir prod. The right-hand pane shows the Claude usage report.](docs/demo.png)
+![A Rex window with six context-coded panes, the work calendar pane and the Claude usage pane. Pane labels read: PROD · kube eks-prod-east, aws acme-prod, dir prod (with the red PROD prompt segment); PROD · ssh db1.prod.example.net; SUDO · port selfupdate; web1.staging.example.net (remote); local · rex-tricks; and PROD · SUDO · dir prod. On the right, the work calendar shows a day of sample meetings above the Claude usage report.](docs/demo.png)
 
-*Left to right, top to bottom: a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, SSH to a production host, a `sudo` command, SSH to a non-production host, an ordinary local pane, and `sudo` inside a production directory. On the right is the [Claude usage pane](docs/claude-usage-pane.md). Host names are examples.*
+*Left to right, top to bottom: a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, SSH to a production host, a `sudo` command, SSH to a non-production host, an ordinary local pane, and `sudo` inside a production directory. On the right are the [work calendar](docs/work-calendar.md), showing made-up meetings from its `--demo` mode, and the [Claude usage pane](docs/claude-usage-pane.md) below it. Host names are examples.*
 
 ## Add-ons
 

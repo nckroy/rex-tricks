@@ -56,7 +56,7 @@ workcal-pane            # open the calendar to the right
 workcal-pane --below    # or below
 ```
 
-`workcal` runs the calendar in the current terminal. `workcal --agenda [YYYY-MM-DD]` prints one day as plain text, and `workcal --fetch [YYYY-MM-DD]` fetches the week containing that date and prints it as JSON, which is useful for checking the connector. `work-calendar/install.sh uninstall` removes the links and the cache.
+`workcal` runs the calendar in the current terminal. `workcal --agenda [YYYY-MM-DD]` prints one day as plain text, and `workcal --fetch [YYYY-MM-DD]` fetches the week containing that date and prints it as JSON, which is useful for checking the connector. `workcal --demo` shows a week of made-up meetings and never fetches. Use it for screenshots, so your real calendar stays out of them. `work-calendar/install.sh uninstall` removes the links and the cache.
 
 | Variable | Default | Effect |
 |---|---|---|

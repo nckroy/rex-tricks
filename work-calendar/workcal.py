@@ -5,6 +5,7 @@ Usage:
   workcal.py                     interactive calendar (curses)
   workcal.py --fetch [MONDAY]    fetch one week (default: this week), print the events as JSON
   workcal.py --agenda [DATE]     print one day's agenda as plain text and exit
+  workcal.py --demo              interactive calendar with made-up events (no fetching), for screenshots
 
 No program outside Claude can call a claude.ai connector, so a fetch runs a headless
 `claude -p`. That run can use only the connector's outlook_calendar_search tool (all
@@ -268,6 +269,44 @@ def print_agenda(day):
         print(f"  {(hm(e['s']) + '–' + hm(e['e']).strip()):<14} {MARK.get(e['showAs'], ' ')} {e['subject']}{x}")
 
 
+
+# ---------------------------------------------------------------- demo data
+
+DEMO = False
+
+# (weekday, start, minutes, subject, showAs, link?) — made-up events for screenshots.
+DEMO_EVENTS = [
+    (0, "09:00", 30, "Team standup", "busy", True), (0, "11:00", 60, "Lunch", "busy", False),
+    (0, "13:00", 60, "Sprint planning", "busy", True), (0, "15:00", 30, "1:1 with Alex", "busy", True),
+    (1, "09:00", 30, "Team standup", "busy", True), (1, "10:00", 90, "Architecture review", "busy", True),
+    (1, "14:00", 60, "Vendor demo: log pipeline", "tentative", True),
+    (2, "09:00", 30, "Team standup", "busy", True), (2, "12:00", 60, "Lunch & learn: OpenTofu", "busy", True),
+    (2, "15:00", 120, "Focus time", "free", False),
+    (3, "09:00", 30, "Team standup", "busy", True), (3, "11:00", 60, "Lunch", "busy", False),
+    (3, "13:30", 60, "Incident review: DNS outage", "busy", True), (3, "16:00", 30, "Release go/no-go", "busy", True),
+    (4, "09:00", 30, "Team standup", "busy", True), (4, "10:00", 60, "Design review: SSO for the portal", "busy", True),
+    (4, "11:00", 60, "Lunch", "busy", False), (4, "12:00", 60, "Customer call: Example University", "busy", True),
+    (4, "13:00", 30, "1:1 with Sam", "busy", True), (4, "14:00", 90, "Quarterly planning", "busy", True),
+    (4, "15:00", 30, "Security office hours", "tentative", True), (4, "16:30", 30, "Timesheets due", "busy", False),
+]
+
+
+def demo_week(mon):
+    evs = []
+    for n, (wd, hhmm, mins, subj, show, link) in enumerate(DEMO_EVENTS):
+        s = datetime.combine(mon + timedelta(days=wd), datetime.strptime(hhmm, "%H:%M").time())
+        evs.append({"id": f"demo{n}", "subject": subj, "start": s.isoformat(),
+                    "end": (s + timedelta(minutes=mins)).isoformat(), "allDay": False, "showAs": show,
+                    "cancelled": False, "location": "", "link": f"https://example.zoom.us/j/{1000 + n}" if link else "",
+                    "webLink": "", "organizer": "Example Organizer", "isOrganizer": False, "attendees": 6 if link else 0})
+    for d0, d1, subj, show in [(0, 5, "Conference week: TechConf (remote)", "free"), (4, 5, "Pat out of office", "free")]:
+        evs.append({"id": subj, "subject": subj, "start": datetime.combine(mon + timedelta(days=d0), datetime.min.time()).isoformat(),
+                    "end": datetime.combine(mon + timedelta(days=d1), datetime.min.time()).isoformat(), "allDay": True,
+                    "showAs": show, "cancelled": False, "location": "", "link": "", "webLink": "", "organizer": "",
+                    "isOrganizer": True, "attendees": 0})
+    return {"week": mon.isoformat(), "fetched": time.time(), "events": evs}
+
+
 # ---------------------------------------------------------------- curses UI
 
 class App:
@@ -306,6 +345,9 @@ class App:
 
     # data -------------------------------------------------------------
     def ensure(self, mon, force=False):
+        if DEMO:
+            self.weeks.setdefault(mon, demo_week(mon))
+            return
         with self.lock:
             if mon in self.fetching:
                 return
@@ -594,6 +636,9 @@ def main():
     if args[:1] == ["--agenda"]:
         print_agenda(date.fromisoformat(args[1]) if len(args) > 1 else date.today())
         return
+    global DEMO
+    if args[:1] == ["--demo"]:
+        DEMO, args = True, args[1:]
     if args:
         print(__doc__.strip())
         sys.exit(2)
