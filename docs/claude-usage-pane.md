@@ -16,6 +16,8 @@ If the [work calendar](work-calendar.md) is installed (`~/.config/rex/work-calen
 
 The `session_id` the hook receives isn't always the id of the transcript the conversation writes to: a conversation can keep writing to an earlier transcript (logged as `sessionId`) while each record also carries the running process's id (logged as `session_id`). The report matches either one. When they differ, the header shows both, for example `b69955af… (transcript 30ee408f)`.
 
+Running `/resume` inside a session is different: recent Claude Code versions open the old conversation as a background session whose records carry only the old conversation's id, never the new session's. The only link is in the new session's own transcript, which logs the `/resume` output ("running in the background (03df1d61)") and a `continued-in` record. The report reads those and counts the resumed conversation too, following chains of resumes. It counts the resumed conversation's records from the last 12 hours, including ones from before the resume.
+
 The report fits itself to the pane. It reads the width from the pane's terminal (`/dev/tty`), because the refresh loop captures its output, then falls back to `$COLUMNS` and then to 80. Set `USAGE_WIDTH` to force a width. Dividers, bars and the sparkline scale between 40 and 120 columns, the notes rewrap, and any line still too long is cut with `…`. A resized pane catches up on the next refresh.
 
 ## Requirements

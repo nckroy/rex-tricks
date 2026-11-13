@@ -217,8 +217,47 @@ print(c("1;97;45", title.center(W)))
 print(RULE)
 
 # ---- this session
+RESUMED_BG = re.compile(r"running in the background \(([0-9a-f]{8})\)")
+
+
+def linked_ids(root_id):
+    # Session ids this pane should count: its own, plus conversations it /resume'd.
+    # Since Claude Code 2.1.x, /resume runs the old conversation as a background session
+    # whose records carry only the old id, so the only link is in this session's own
+    # transcript: the /resume output "running in the background (03df1d61)" and a
+    # "continued-in" record. Followed transitively, so resumes of resumes are found too.
+    ids, todo = set(), [root_id]
+    while todo:
+        sid = todo.pop()
+        if not sid or sid in ids:
+            continue
+        ids.add(sid)
+        for fpath in glob.glob(os.path.join(ROOT, "*", sid + ".jsonl")):
+            try:
+                for line in open(fpath, encoding="utf-8", errors="replace"):
+                    if "continued-in" not in line and "running in the background" not in line:
+                        continue
+                    try:
+                        d = json.loads(line)
+                    except ValueError:
+                        continue
+                    if d.get("type") == "continued-in":
+                        todo.append(d.get("continuedInSessionId") or "")
+                    m = RESUMED_BG.search(str(d.get("content") or ""))
+                    if m:
+                        # Expand the 8-char prefix to the full transcript id.
+                        for hit in glob.glob(os.path.join(ROOT, "*", m.group(1) + "*.jsonl")):
+                            todo.append(os.path.basename(hit)[:-len(".jsonl")])
+            except OSError:
+                continue
+    return ids
+
+
+IDS = linked_ids(SESSION) if SESSION else set()
+
+
 def mine(e):
-    return bool(SESSION) and (SESSION in (e["session"], e["alt"]) or SESSION in e["file"])
+    return bool(IDS) and (bool(IDS & {e["session"], e["alt"]}) or os.path.basename(e["file"])[:-len(".jsonl")] in IDS)
 
 
 sess = [e for e in entries if mine(e)]
