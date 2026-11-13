@@ -1,310 +1,79 @@
 # rex-tricks
 
-Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal.
+Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on macOS.
 
 ![A Rex window with six context-coded panes and the Claude usage pane. Pane labels read: PROD · kube eks-prod-east, aws acme-prod, dir prod (with the red PROD prompt segment); PROD · ssh db1.prod.example.net; SUDO · port selfupdate; web1.staging.example.net (remote); local · rex-tricks; and PROD · SUDO · dir prod. The right-hand pane shows the Claude usage report.](docs/demo.png)
 
-*Left to right, top to bottom: a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, SSH to a production host, a `sudo` command, SSH to a non-production host, an ordinary local pane, and `sudo` inside a production directory. On the right is the [Claude usage pane](#claude-usage-pane). Host names are examples.*
+*Left to right, top to bottom: a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, SSH to a production host, a `sudo` command, SSH to a non-production host, an ordinary local pane, and `sudo` inside a production directory. On the right is the [Claude usage pane](docs/claude-usage-pane.md). Host names are examples.*
 
-## Context-coded panes: PROD, SUDO, remote and local
+## Add-ons
 
-Files: [`prod-highlight.zsh`](prod-highlight.zsh) (zsh hook), [`context-watch.lua`](context-watch.lua) (process watcher), [`install.sh`](install.sh)
+| Add-on | What it does | Docs |
+|---|---|---|
+| **Context-coded panes** | Labels and colors each pane by what it's working against: 🔴 PROD, 🟡 SUDO, 🌐 remote or 💻 local | [docs/context-coded-panes.md](docs/context-coded-panes.md) |
+| **Claude usage pane** | Opens a live report of your Claude Code usage beside Claude when it starts | [docs/claude-usage-pane.md](docs/claude-usage-pane.md) |
+| **Work calendar pane** | A text-mode view of your Outlook calendar, fed by Claude's Microsoft 365 connector | [docs/work-calendar.md](docs/work-calendar.md) |
 
-This add-on makes it obvious which Rex panes are working against production, which are running as root, which are on another machine, and which are just local. It changes each pane's label and, in zsh, the colors of the text. Two parts work together:
+### Context-coded panes
 
-- **The zsh hook** runs inside your shell. Before each prompt, and just before `ssh`, `mosh`, `sudo`, `su` and `doas`, it labels the pane and recolors its text.
-- **The process watcher** runs in the background. It watches what is actually running in *every* pane, so it also catches what the hook can't see:
-  - remote sessions started through an alias, function or script
-  - other remote tools: `kubectl exec`, `docker exec`, `aws ssm`, `tailscale ssh`, `et`, `autossh`
-  - root shells in bash, or in panes launched directly into a program
-  - a second SSH hop through a bastion, when the far host's shell reports where it is (see [Through a bastion](#through-a-bastion))
+- Labels panes `🔴 PROD`, `🟡 SUDO`, `🌐` remote or `💻 local`, with the reason, such as `🔴 PROD · kube eks-prod-east`.
+- Recolors the text red in production and yellow as root, and adds a `⚠ PROD` segment to a Powerlevel10k prompt.
+- Detects production from SSH targets, the kube context, AWS profiles, OpenTofu workspaces, directories, and your own list of hosts.
+- Catches remote sessions however they start: `ssh`, `mosh`, `kubectl exec`, `docker exec`, `aws ssm`, `tailscale ssh` and aliases or scripts that run them.
+- Follows a second SSH hop through a bastion when the far shells report their host (OSC 7).
 
-| Context | Pane label | Text colors (hook) | Prompt (hook) |
-|---|---|---|---|
-| Production | `🔴 PROD · kube eks-prod-east`, `🔴 PROD · ssh db1.prod.example` | red-shifted | white-on-red `⚠ PROD …` segment (Powerlevel10k) |
-| Production + sudo | `🔴 PROD · SUDO · dir prod` | red-shifted (prod wins) | as above |
-| Running as root (`sudo` / `su` / `doas`) | `🟡 SUDO · root shell`, `🟡 SUDO · port selfupdate` | yellow-shifted | — |
-| Production host reached through a bastion (watcher) | `🔴 PROD · db1.prod.example via ssh bastion` | theme | — |
-| Remote session started from this pane | `🌐 dev-box`, `🌐 ssh web1.staging`, `🌐 kubectl exec` | theme | — |
-| This shell itself runs on a remote machine | `🌐 devbox · ~/src` | theme | — |
-| Everything else | `💻 local · <dir>` | theme | — |
+### Claude usage pane
 
-Everything goes back to normal once you leave the context, for example when you exit the SSH or `sudo -i` session, change directory, or switch kube context.
+- Opens to the right of Claude Code whenever you start `claude` in Rex, and refreshes every 30 seconds.
+- Shows this session's tokens, cache hit rate, models, subagents and output by hour.
+- Shows context size and growth, with likely compactions.
+- Shows the current 5-hour window, with time left and per-session totals.
 
-### Remote vs local
+### Work calendar pane
 
-A pane counts as **remote** in any of these cases:
+- Day view with a `now` line and a countdown to your next meeting. Conflicts are marked, and you can join a meeting's Zoom link with one key.
+- Week strip, week view, and navigation by day and by week.
+- Fetches through a locked-down headless `claude -p`. The model never reads your events, and several panes share one cache.
+- When the Claude usage pane is installed, it opens above that pane each time you start `claude`.
 
-| How | Detected by |
-|---|---|
-| You type `ssh` / `mosh` in a hooked zsh | hook, from the command line, just before it runs |
-| The pane is running `ssh`, `mosh-client`, `et`, `autossh`, `kubectl exec/attach/debug`, `docker`/`podman exec/attach/run`, `aws ssm` (`session-manager-plugin`) or `tailscale ssh`, however it was started | watcher, from the pane's process tree |
-| The hooked shell itself runs remotely: `SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` is set, or the host isn't one of `REX_LOCAL_HOSTS` | hook, once when the shell starts |
+## Install
 
-If `REX_LOCAL_HOSTS` isn't set, macOS counts as local and any other OS (for example a Linux or FreeBSD machine you reach as a Rex host) counts as remote. The hook only does this check on a machine where it's installed.
+You need Rex on macOS with the `rex` CLI on `PATH`. Each add-on installs on its own. Run its installer from your clone of this repo, and run it again after you pull updates.
 
-Anything else is **local**.
+**Context-coded panes** (needs `jq`; Powerlevel10k is optional):
 
-### Through a bastion
-
-If you `ssh bastion` and then, from the bastion's shell, `ssh db1.prod.example`, the process in the pane is still `ssh bastion`. Neither the hook nor the process tree can see the second hop.
-
-The watcher gets it from the directory reports that shells send with OSC 7 (`file://host/path`). Those pass through any number of SSH hops, and Rex fires `terminal.pwd_changed` for each one. While an SSH session runs in a pane, the watcher treats the host in the latest report as the host the pane is really on:
-
-| You're on | Pane label |
-|---|---|
-| the bastion | unchanged, e.g. `🌐 bastion` |
-| a production host behind it | `🔴 PROD · db1.prod.example via ssh bastion` |
-| any other host behind it | `🌐 web2.staging.example via ssh bastion` |
-
-A host counts as production by the same rules as an `ssh` target: its name, or `~/.config/rex/prod-hosts`. When you're back on the bastion, or the SSH session ends, the label goes back. The bastion counts as itself whether it reports the name you typed after `ssh` or the real host name an alias in `~/.ssh/config` stands for (resolved with `ssh -G`, using the session's own options). A report from a shell on this Mac changes nothing.
-
-This only works if the shells on the far side send OSC 7, and many don't by default. To add it, put one of these in the shell startup file on the bastion **and** on the hosts behind it. If the bastion doesn't report, the pane stays labeled with the last host behind it until you leave the bastion.
-
-```bash
-# bash: ~/.bashrc
-PROMPT_COMMAND='printf "\e]7;file://%s%s\a" "$HOSTNAME" "$PWD"'${PROMPT_COMMAND:+"; $PROMPT_COMMAND"}
+```sh
+./install.sh
 ```
+
+Then add this line to the **end** of `~/.zshrc`, after Powerlevel10k is loaded, and open a new pane:
 
 ```zsh
-# zsh: ~/.zshrc
-_osc7() { printf '\e]7;file://%s%s\a' "$HOST" "$PWD" }; precmd_functions+=(_osc7)
+# Rex: context-coded panes (PROD / SUDO / local). Keep after p10k is loaded.
+[[ -r ~/.config/rex/prod-highlight.zsh ]] && source ~/.config/rex/prod-highlight.zsh
 ```
 
-The report has to name the host the way your production rules expect. If a host's short name doesn't look like production, list it in `~/.config/rex/prod-hosts` or report the full name.
-
-### What counts as production
-
-A name counts as production if it contains `prod`, `prd` or `production` as a separate word, matched case-insensitively. So `db1.prod.example.net`, `acme-prod` and `eks-prod-east` match, but `product` doesn't.
-
-A host also counts as production if it's listed in `~/.config/rex/prod-hosts`, whatever its name. Put one host or glob per line, and start comments with `#`. Matching ignores case, and SSH aliases from `~/.ssh/config` resolve to their real `HostName` with `ssh -G`. Both the hook and the watcher read this file. It stays on your machine, so your internal host names don't end up in this repo:
-
-```
-# ~/.config/rex/prod-hosts
-bastion.example.org
-*.live.example.org
-```
-
-Open a new pane after editing the file (the hook reads it at shell start-up), and run `./install.sh` again to restart the watcher.
-
-| Signal | Where it looks | Hook | Watcher |
-|---|---|---|---|
-| ssh | Target host of an `ssh` / `mosh` command (option arguments such as `-p 22 -i key` are skipped) | ✓ | ✓ (`ssh`, `autossh`) |
-| host | The machine the hooked shell runs on, when that's remote | ✓ | |
-| kube | `current-context` in `$KUBECONFIG` or `~/.kube/config`. It reads the file directly rather than running `kubectl`, which keeps it fast. | ✓ | |
-| aws | `AWS_PROFILE`, `AWS_VAULT`, `AWS_DEFAULT_PROFILE` | ✓ | |
-| tofu | `TF_WORKSPACE`, or `.terraform/environment` in the current directory | ✓ | |
-| dir | A path component named `prod`, `prd` or `production`, or any glob in `REX_PROD_DIRS` | ✓ | |
-| via | The host in an OSC 7 directory report from the far side of an SSH session ([Through a bastion](#through-a-bastion)) | | ✓ |
-
-The hook lists all matching reasons in the label, e.g. `🔴 PROD · kube eks-prod-east, aws acme-prod`.
-
-### Requirements
-
-- [Rex](https://www.superlogical.com/rex/docs) on macOS, with the `rex` CLI on `PATH`, running zsh in Rex panes. The hook does nothing outside Rex, because it needs `$REX_SESSION` and `$REX_BLOCK`.
-- `jq`.
-- Optional: [Powerlevel10k](https://github.com/romkatv/powerlevel10k) for the red `PROD` prompt segment. Without it, the labels and text colors still work.
-
-### Install
-
-1. From your clone of this repo, run:
-
-   ```sh
-   ./install.sh
-   ```
-
-   This copies `prod-highlight.zsh` and `context-watch.lua` to `~/.config/rex/`. It then installs and starts a LaunchAgent (`io.github.nckroy.rex-context-watch`) that keeps the watcher running and restarts it if it stops (for example when Rex restarts). The log goes to `~/Library/Logs/rex-context-watch.log`.
-
-   The files are copied rather than linked because a LaunchAgent reading `~/Documents` or iCloud folders triggers macOS privacy prompts. **Run `./install.sh` again after pulling updates.**
-
-2. Add the `source` line to the **end** of `~/.zshrc`, after Powerlevel10k is loaded. `install.sh` doesn't touch your dotfiles, and without this line the hook never loads. One way to append it:
-
-   ```zsh
-   cp ~/.zshrc ~/.zshrc.bak
-   cat >> ~/.zshrc <<'EOF'
-
-   # Rex: context-coded panes (PROD / SUDO / local). Keep after p10k is loaded.
-   [[ -r ~/.config/rex/prod-highlight.zsh ]] && source ~/.config/rex/prod-highlight.zsh
-   EOF
-   ```
-
-3. Open a new pane, or run `exec zsh` in panes that are already open. A new pane should be labeled `💻 local · <dir>`.
-
-   - **Check the hook:** run `print -l $precmd_functions` in a pane. It should list `_rex_prod_precmd` before `_p9k_precmd`.
-   - **Check the watcher:** run `launchctl print gui/$(id -u)/io.github.nckroy.rex-context-watch | grep state`. It should say `state = running`.
-
-The watcher works on its own too. Without step 2 you get labels from the watcher, but no colors, no prompt segment, and no kube/AWS/tofu/directory checks.
-
-To try the watcher without installing it, run `rex do --all context-watch.lua` in a spare pane and press Ctrl-C to stop it. To remove the LaunchAgent, run `./install.sh uninstall`.
-
-### Customize
-
-**Hook:** set any of these in `~/.zshrc` **before** the `source` line:
-
-```zsh
-REX_PROD_HOST_RE='(^|\.)(prod|prd)[0-9]*\.|^bastion-'   # your real prod host naming
-REX_PROD_NAME_RE='(^|[^[:alnum:]])(prod|prd|production|live)([^[:alnum:]]|$)'
-REX_PROD_DIRS=(~/src/infra/live/* ~/src/deploy/production)
-REX_PROD_HOSTS=(bastion.example.org '*.live.example.org')    # added to ~/.config/rex/prod-hosts
-REX_PROD_HOSTS_FILE=~/somewhere/else/prod-hosts             # default ~/.config/rex/prod-hosts
-REX_LOCAL_HOSTS=(my-mac devbox)                         # short hostnames that count as local
-REX_PROD_FG='#ffd7d7';  REX_PROD_PALETTE=(...16 colors...)   # red text palette
-REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colors...)   # yellow text palette
-```
-
-`REX_PROD_HOST_RE` defaults to `REX_PROD_NAME_RE`. Set it if your production hosts are named differently from your other production resources.
-
-**Watcher:** edit the tables at the top of `context-watch.lua`, then run `./install.sh` again:
-- `PROD_WORDS`: words that mark a host as production. Keep these in step with `REX_PROD_NAME_RE`.
-- Specific production hosts go in `~/.config/rex/prod-hosts` (see [What counts as production](#what-counts-as-production)), not in the script.
-- `REMOTE_ALWAYS` and `REMOTE_SUBCOMMANDS`: which programs count as a remote session.
-
-### How it works
-
-- **Labels:** both parts call the Rex server API `session.set_block_label`.
-  - The hook runs the call only when the label changes, which takes about 30 ms. It runs synchronously so that a quick `sudo` can't leave a stale label behind.
-  - The watcher reacts to Rex's `terminal.process_changed` event. It reads the foreground process and its parents, with each one's name and user ID, and uses `ps` for an `ssh` command line.
-  - It also reacts to `terminal.pwd_changed`. While an SSH session is the pane's program, the host in that report is the hop the pane is on. The watcher forgets it when that SSH session ends.
-- **No fighting between the two:** the watcher only replaces a label that signals less than its own (🔴 > 🟡 > 🌐 > anything else). When the context ends, it restores the label it replaced, but only if nothing else changed the label in the meantime. So in a hooked zsh, the hook's own labels win.
-- **Text colors (hook only):** the hook prints standard terminal escape sequences. OSC 10 sets the foreground and OSC 4 sets palette entries 0–15. OSC 104 / OSC 110 restore your theme. Only the 16 ANSI colors and the default foreground change, so 256-color and true-color output is untouched.
-- **Timing (hook):** a zsh `precmd` hook handles prompt-time state such as directory, kube, AWS and tofu. A `preexec` hook marks `ssh`/`mosh`/`sudo`/`su`/`doas` just before they start, so the label and colors are in place for the password prompt and the whole session. The `precmd` hook is placed before Powerlevel10k's, so the prompt segment always shows the current state.
-
-### Limitations
-
-- **The hook doesn't tint the background yet.** Since the 2026-11-03 release, Rex draws a background that a program in the pane sets with OSC 11, and `OSC 111` restores the theme. The hook still only recolors the text, so for now the highlight is the label plus the text colors.
-- **The watcher can't tint or recolor anything.** Rex only takes colors from the program in the pane. The server's `com.superlogical.terminal.set_theme` method has no visible effect in the Mac app. `com.superlogical.terminal.write` sends bytes to the program's input, not to the screen. Per-pane tinting from the API is an open feature request in the Rex Beta Discord ("Support tinting or theming of individual panes").
-- **Switching the app theme is all-or-nothing.** The Mac app's `client.theme.change` action recolors every pane, so it isn't used here.
-- **Only the hook can recolor text.** Panes the watcher catches on its own (bash, aliases, panes launched directly into a program, and production hosts behind a bastion) get the label but keep the theme's colors.
-- **Hosts behind a bastion are only seen if their shells report OSC 7.** See [Through a bastion](#through-a-bastion). Without a report from the bastion, the label isn't restored when you return to it, only when the SSH session ends.
-- **The watcher only checks hosts for `ssh` and `autossh`.** `mosh-client`, `kubectl exec` and the rest are labeled remote but never PROD, because their command lines don't carry a reliable host name.
-- **sudo is only marked while something runs as root.** There's no SUDO marker for the time afterwards when sudo can run again without a password. Checking that with `sudo -n` would write an entry to the system log each time.
-- **Remote work is identified by host name or program, not content.** What you do on the remote machine isn't inspected. A Rex host only gets the hook's checks if the hook is installed there too, and the watcher only sees panes on the server it runs against (your Mac).
-- **Manual labels get overwritten.** A label you set by hand is replaced the next time the context changes.
-
-### Troubleshooting
-
-**A pane isn't labeled or colored at all.** The hook isn't loaded in that shell. Check that the `source` line is in `~/.zshrc` with `grep prod-highlight ~/.zshrc`. Then run `exec zsh` in that pane, or open a new one. A shell that was already running when you added the line doesn't pick it up on its own.
-
-**A root shell (`sudo su -`, `sudo -i`) is labeled SUDO but its text isn't yellow.** The watcher labeled it, but the colors only come from the hook. Make sure the root shell was started from a zsh that has the hook loaded (see above). Exit the root shell, run `exec zsh`, then start it again.
-
-**Do I need to make root's shell zsh (`chsh`)?** No. The hook runs in *your* zsh, just before `sudo` starts, and the watcher reads the pane's processes from outside. The label and text colors belong to the Rex pane, so they stay in place whatever shell root uses (bash, sh, zsh). Changing root's shell wouldn't help anyway. Root's zsh reads root's config, not yours, and `sudo su -` clears `REX_SESSION` and `REX_BLOCK`, which the hook needs to find its pane.
-
-**Remote sessions from aliases or scripts aren't labeled.** The watcher isn't running. Check it with `launchctl print gui/$(id -u)/io.github.nckroy.rex-context-watch | grep state`, look in `~/Library/Logs/rex-context-watch.log`, or run `./install.sh` again.
-
-**My Mac shows up as `🌐` remote.** You've set `REX_LOCAL_HOSTS` but left this Mac out. Add its short hostname (`hostname -s`).
-
-## Claude usage pane
-
-Files: [`claude-usage/`](claude-usage/): [`usage_report.py`](claude-usage/usage_report.py) (report), [`usage_loop.sh`](claude-usage/usage_loop.sh) (refresh loop), [`rex_session_start.sh`](claude-usage/rex_session_start.sh) (Claude Code hook), [`install.sh`](claude-usage/install.sh)
-
-When you start [Claude Code](https://claude.com/claude-code) in a Rex pane, this opens a pane to its right with a color report of your Claude usage, refreshed every 30 seconds:
-
-- **This session:** span, requests, uncached input, cache writes and reads, output (and thinking), total tokens, cache hit rate, usage by model, subagent requests, output by hour and the largest context additions.
-- **Context:** the tokens the latest main-thread request carried, the peak and starting size, likely compactions (a drop of more than half), and a sparkline of growth over the session.
-- **Current 5-hour window:** start, end, elapsed and remaining time with a progress bar, totals for every session in the window, output and new-input rates, and a per-session list with each session's current context.
-
-### Claude CLI detection
-
-The pane opens from a Claude Code `SessionStart` hook with the `startup` matcher, so it fires when a new `claude` session starts, not on resume or `/clear`. The hook script checks for `$REX_SESSION` and `$REX_BLOCK`, so outside Rex it does nothing. It reads `session_id` from the hook's JSON on stdin and runs `rex split --split=right --focus=false` to open the pane without taking focus from Claude. Because `rex split --ratio` doesn't take effect, it then moves the border with the server API `session.resize_pane`, so that the pane is about 83 columns wide. The hook always exits 0 and has a 10-second timeout, so it can't block or break Claude's start-up.
-
-If the [work calendar](#work-calendar-pane) is installed (`~/.config/rex/work-calendar/workcal.py` exists), the same hook splits the usage pane and opens the calendar above it, with 40% of the height. Without it, the hook opens only the usage pane, as before.
-
-The `session_id` the hook receives isn't always the id of the transcript the conversation writes to: a conversation can keep writing to an earlier transcript (logged as `sessionId`) while each record also carries the running process's id (logged as `session_id`). The report matches either one. When they differ, the header shows both, for example `b69955af… (transcript 30ee408f)`.
-
-The report fits itself to the pane. It reads the width from the pane's terminal (`/dev/tty`), because the refresh loop captures its output, then falls back to `$COLUMNS` and then to 80. Set `USAGE_WIDTH` to force a width. Dividers, bars and the sparkline scale between 40 and 120 columns, the notes rewrap, and any line still too long is cut with `…`. A resized pane catches up on the next refresh.
-
-### Requirements
-
-- Rex on macOS with the `rex` CLI on `PATH`, Claude Code, `python3` and `jq`.
-
-### Install
+**Claude usage pane** (needs Claude Code, `python3` and `jq`):
 
 ```sh
 claude-usage/install.sh
 ```
 
-This copies the scripts to `~/.claude/scripts/claude-usage/` and adds the hook to `~/.claude/settings.json`, after backing that file up to `~/.claude/backups/`. Existing hooks, including Rex's own `SessionStart` hook, are kept. Running it again updates the scripts without adding a second hook. To remove the hook, run `claude-usage/install.sh uninstall`.
-
-To see the report without the hook, run `python3 ~/.claude/scripts/claude-usage/usage_report.py <session-id>`. Set `NO_COLOR=1` for plain text.
-
-### Limitations
-
-- **Counts are estimates from local logs.** They come from the `usage` block of each assistant message in `~/.claude/projects/**/*.jsonl`, de-duplicated by message and request ID. Usage on other machines or on claude.ai isn't included.
-- **The 5-hour window is reconstructed, not read from Anthropic.** It's worked out the way ccusage does it: a window starts at the hour of the first message after a gap of 5 hours or more. Anthropic doesn't publish plan limits in tokens, so the pane can't show a percentage of your limit. Run `/usage` in Claude Code for the server's own figures.
-- **Context isn't shown as a percentage** of the model's window. `/context` in Claude Code shows that.
-- **Pane size is set once,** when the pane opens. After you change the font size or the window, drag the border or close and reopen the pane.
-
-## Work calendar pane
-
-Files: [`work-calendar/`](work-calendar/): [`workcal.py`](work-calendar/workcal.py) (calendar), [`workcal-pane.sh`](work-calendar/workcal-pane.sh) (opens it in a Rex pane), [`install.sh`](work-calendar/install.sh)
-
-A text-mode view of your Outlook (Microsoft 365) calendar for a Rex pane. Its events come from Claude's Microsoft 365 connector, so you don't need an ICS link, an app registration or an account in macOS Calendar.
-
-- **Day view:** the day's all-day events, then its meetings with a red `now` line that names the next meeting and how long until it starts. The meeting in progress is green, past meetings are dimmed, and tentative ones are yellow. `!` marks a meeting that overlaps another one you're busy for, and `↗` marks one with a join link.
-- **Week strip:** the seven days of the week with a meeting count for each, when the pane is wide enough.
-- **Week view (`w`):** the next seven days from the selected one, as a compact list.
-
-| Key | Action |
-|---|---|
-| `←` `→` (or `h` `l`) | previous / next day |
-| `PgUp` `PgDn` (or `H` `L`) | previous / next week |
-| `t` | today |
-| `↑` `↓` (or `k` `j`) | pick a meeting; the bottom line shows its length, organizer, invite count and link |
-| `Enter` | open the picked meeting's join link (its location URL), or Outlook if it has none |
-| `o` | open the picked meeting in Outlook on the web |
-| `w` | switch between day and week view |
-| `r` | refresh now |
-| `q` | quit |
-
-### How it fetches events
-
-No program outside Claude can call a claude.ai connector, so each fetch runs a headless `claude -p` (Haiku by default). That run is locked down:
-
-- `--tools ""` turns off every built-in tool, and `--allowedTools` allows only the connector's `outlook_calendar_search`, so the run can't read files, run commands or call any other connector.
-- The prompt asks for all the pages of one week in a single turn of parallel calls. `--max-turns 1` stops the run as soon as they return, so the model never reads your events, and text in an event can't steer it.
-- The events are taken from the raw tool results in the `stream-json` output, not from anything the model writes. Results from a call with different dates than were asked for are ignored.
-- Every event carries its position in the result set, so the fetcher checks it got all of them and asks again for any missing pages.
-- `REX_*` variables are removed from the run's environment, so Claude Code hooks that open Rex panes (like the [Claude usage pane](#claude-usage-pane)) don't fire.
-
-Pages hold 15 events, because the connector's larger pages are spilled to a file instead of being returned inline. A week of about 50 events takes about 10 seconds and costs about $0.015.
-
-The week on screen refreshes every 15 minutes, and other weeks load when you move to them. Calendar panes share one cache, and a lock file lets only one of them fetch a given week at a time. When one pane has fetched, the others pick up its copy. So several Claude sessions, each with its own calendar pane, cost no more than one. Events are cached per week in `~/Library/Caches/rex-work-calendar/` (directory mode 700, files mode 600), so the pane opens instantly with the last fetch and keeps showing it if a fetch fails. The cache holds real titles, including those of events marked private, and stays on your machine.
-
-Graph labels times with Windows zone names (`Mountain Standard Time`). The pane converts them to the Mac's time zone, by name, so times stay right across a daylight saving change.
-
-### Requirements
-
-- Rex on macOS with the `rex` CLI on `PATH`, and `python3` (3.9 or later).
-- Claude Code (`claude` on `PATH`), signed in with a claude.ai account whose Microsoft 365 connector is connected and allowed by your organization.
-
-### Install
+**Work calendar pane** (needs Claude Code signed in to claude.ai with the Microsoft 365 connector connected, and `python3`):
 
 ```sh
 work-calendar/install.sh
+workcal-pane          # open it now, to the right of this pane
 ```
 
-This copies the scripts to `~/.config/rex/work-calendar/` and links `workcal` and `workcal-pane` into `~/.local/bin`.
+Each installer takes `uninstall`. The docs for each add-on cover requirements, settings, checks and troubleshooting.
 
-If the [Claude usage pane](#claude-usage-pane) is installed too, its hook opens the calendar above the usage pane every time you start `claude` in Rex; run `claude-usage/install.sh` again after pulling, so the installed hook script includes the calendar. You can also open it yourself, in any Rex pane:
+## Contributing
 
-```sh
-workcal-pane            # open the calendar to the right
-workcal-pane --below    # or below
-```
+Issues and pull requests are welcome.
 
-`workcal` runs the calendar in the current terminal. `workcal --agenda [YYYY-MM-DD]` prints one day as plain text, and `workcal --fetch [YYYY-MM-DD]` fetches the week containing that date and prints it as JSON, which is useful for checking the connector. `work-calendar/install.sh uninstall` removes the links and the cache.
-
-| Variable | Default | Effect |
-|---|---|---|
-| `WORKCAL_REFRESH_MIN` | `15` | minutes between automatic refreshes |
-| `WORKCAL_MODEL` | `haiku` | model for the fetch run |
-| `WORKCAL_CLAUDE` | `claude` | path to the Claude Code CLI |
-| `NO_COLOR` | | plain text |
-
-### Limitations
-
-- **Default calendar only.** Shared and delegated calendars aren't fetched.
-- **Join links come from the location field.** A Teams or Zoom link that's only in the invite body isn't found; `Enter` then opens the event in Outlook, where you can join.
-- **Each refresh costs a little.** At the default 15 minutes, calendar panes left open for a 10-hour day make about 40 fetches between them, about $0.60. Raise `WORKCAL_REFRESH_MIN` to spend less.
-- **It's read-only.** You can't accept, decline or edit events from the pane.
-- **A failed fetch waits two minutes** before it tries again (press `r` to retry sooner). The header shows `⚠` and the footer shows the error, while the cached events stay on screen.
+- **One folder or file set per add-on,** each with its own `install.sh` that copies files into place (a LaunchAgent can't read `~/Documents` without privacy prompts) and supports `uninstall`.
+- **Document an add-on in `docs/<add-on>.md`:** what it does, requirements, install, settings, how it works and limitations. Add a row to the table above and a few bullets about what it does. Keep the details out of this README.
+- **Test in Rex,** in a real pane, at narrow and wide sizes. `rex block capture -b <block>` prints a pane's screen.
+- **Keep private data out of the repo.** Use example host names (`example.net`), and read real ones from local files such as `~/.config/rex/prod-hosts`.
+- **Write in American English,** in short, plain sentences.
