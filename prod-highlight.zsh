@@ -154,8 +154,8 @@ _rex_prod_reasons() {  # $1 = optional command about to run
   print -r -- ${(j:, :)reasons}
 }
 
-# Red-shifted text colours for prod panes. Rex honours program-set foreground
-# and palette colours (OSC 10 / OSC 4) but not the background, so this recolours
+# Red-shifted text colors for prod panes. Rex honors program-set foreground
+# and palette colors (OSC 10 / OSC 4) but not the background, so this recolors
 # the text only. Override REX_PROD_FG / REX_PROD_PALETTE before sourcing.
 : ${REX_PROD_FG:='#ffd7d7'}
 (( ${+REX_PROD_PALETTE} )) || typeset -ga REX_PROD_PALETTE=(
@@ -164,7 +164,7 @@ _rex_prod_reasons() {  # $1 = optional command about to run
   '#805050' '#ff7070' '#f0c080' '#ffd090'   # 8-15: bright variants
   '#e090b0' '#ff90c8' '#f0b0b0' '#ffe8e8'
 )
-# Yellow-shifted text colours while a sudo/su/doas command runs.
+# Yellow-shifted text colors while a sudo/su/doas command runs.
 : ${REX_SUDO_FG:='#fff3c4'}
 (( ${+REX_SUDO_PALETTE} )) || typeset -ga REX_SUDO_PALETTE=(
   '#2e2810' '#ff8a50' '#c8d060' '#ffd84d'   # 0 black  1 red→orange  2 green→lime  3 yellow

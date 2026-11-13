@@ -10,16 +10,16 @@ Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal.
 
 Files: [`prod-highlight.zsh`](prod-highlight.zsh) (zsh hook), [`context-watch.lua`](context-watch.lua) (process watcher), [`install.sh`](install.sh)
 
-This add-on makes it obvious which Rex panes are working against production, which are running as root, which are on another machine, and which are just local. It changes each pane's label and, in zsh, the colours of the text. Two parts work together:
+This add-on makes it obvious which Rex panes are working against production, which are running as root, which are on another machine, and which are just local. It changes each pane's label and, in zsh, the colors of the text. Two parts work together:
 
-- **The zsh hook** runs inside your shell. Before each prompt, and just before `ssh`, `mosh`, `sudo`, `su` and `doas`, it labels the pane and recolours its text.
+- **The zsh hook** runs inside your shell. Before each prompt, and just before `ssh`, `mosh`, `sudo`, `su` and `doas`, it labels the pane and recolors its text.
 - **The process watcher** runs in the background. It watches what is actually running in *every* pane, so it also catches what the hook can't see:
   - remote sessions started through an alias, function or script
   - other remote tools: `kubectl exec`, `docker exec`, `aws ssm`, `tailscale ssh`, `et`, `autossh`
   - root shells in bash, or in panes launched directly into a program
   - a second SSH hop through a bastion, when the far host's shell reports where it is (see [Through a bastion](#through-a-bastion))
 
-| Context | Pane label | Text colours (hook) | Prompt (hook) |
+| Context | Pane label | Text colors (hook) | Prompt (hook) |
 |---|---|---|---|
 | Production | `🔴 PROD · kube eks-prod-east`, `🔴 PROD · ssh db1.prod.example` | red-shifted | white-on-red `⚠ PROD …` segment (Powerlevel10k) |
 | Production + sudo | `🔴 PROD · SUDO · dir prod` | red-shifted (prod wins) | as above |
@@ -59,7 +59,7 @@ The watcher gets it from the directory reports that shells send with OSC 7 (`fil
 
 A host counts as production by the same rules as an `ssh` target: its name, or `~/.config/rex/prod-hosts`. When you're back on the bastion, or the SSH session ends, the label goes back. The bastion counts as itself whether it reports the name you typed after `ssh` or the real host name an alias in `~/.ssh/config` stands for (resolved with `ssh -G`, using the session's own options). A report from a shell on this Mac changes nothing.
 
-This only works if the shells on the far side send OSC 7, and many don't by default. To add it, put one of these in the shell start-up file on the bastion **and** on the hosts behind it. If the bastion doesn't report, the pane stays labelled with the last host behind it until you leave the bastion.
+This only works if the shells on the far side send OSC 7, and many don't by default. To add it, put one of these in the shell startup file on the bastion **and** on the hosts behind it. If the bastion doesn't report, the pane stays labeled with the last host behind it until you leave the bastion.
 
 ```bash
 # bash: ~/.bashrc
@@ -103,7 +103,7 @@ The hook lists all matching reasons in the label, e.g. `🔴 PROD · kube eks-pr
 
 - [Rex](https://www.superlogical.com/rex/docs) on macOS, with the `rex` CLI on `PATH`, running zsh in Rex panes. The hook does nothing outside Rex, because it needs `$REX_SESSION` and `$REX_BLOCK`.
 - `jq`.
-- Optional: [Powerlevel10k](https://github.com/romkatv/powerlevel10k) for the red `PROD` prompt segment. Without it, the labels and text colours still work.
+- Optional: [Powerlevel10k](https://github.com/romkatv/powerlevel10k) for the red `PROD` prompt segment. Without it, the labels and text colors still work.
 
 ### Install
 
@@ -128,16 +128,16 @@ The hook lists all matching reasons in the label, e.g. `🔴 PROD · kube eks-pr
    EOF
    ```
 
-3. Open a new pane, or run `exec zsh` in panes that are already open. A new pane should be labelled `💻 local · <dir>`.
+3. Open a new pane, or run `exec zsh` in panes that are already open. A new pane should be labeled `💻 local · <dir>`.
 
    - **Check the hook:** run `print -l $precmd_functions` in a pane. It should list `_rex_prod_precmd` before `_p9k_precmd`.
    - **Check the watcher:** run `launchctl print gui/$(id -u)/io.github.nckroy.rex-context-watch | grep state`. It should say `state = running`.
 
-The watcher works on its own too. Without step 2 you get labels from the watcher, but no colours, no prompt segment, and no kube/AWS/tofu/directory checks.
+The watcher works on its own too. Without step 2 you get labels from the watcher, but no colors, no prompt segment, and no kube/AWS/tofu/directory checks.
 
 To try the watcher without installing it, run `rex do --all context-watch.lua` in a spare pane and press Ctrl-C to stop it. To remove the LaunchAgent, run `./install.sh uninstall`.
 
-### Customise
+### Customize
 
 **Hook:** set any of these in `~/.zshrc` **before** the `source` line:
 
@@ -148,8 +148,8 @@ REX_PROD_DIRS=(~/src/infra/live/* ~/src/deploy/production)
 REX_PROD_HOSTS=(bastion.example.org '*.live.example.org')    # added to ~/.config/rex/prod-hosts
 REX_PROD_HOSTS_FILE=~/somewhere/else/prod-hosts             # default ~/.config/rex/prod-hosts
 REX_LOCAL_HOSTS=(my-mac devbox)                         # short hostnames that count as local
-REX_PROD_FG='#ffd7d7';  REX_PROD_PALETTE=(...16 colours...)   # red text palette
-REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colours...)   # yellow text palette
+REX_PROD_FG='#ffd7d7';  REX_PROD_PALETTE=(...16 colors...)   # red text palette
+REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colors...)   # yellow text palette
 ```
 
 `REX_PROD_HOST_RE` defaults to `REX_PROD_NAME_RE`. Set it if your production hosts are named differently from your other production resources.
@@ -166,30 +166,30 @@ REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colours...)   # yellow text pale
   - The watcher reacts to Rex's `terminal.process_changed` event. It reads the foreground process and its parents, with each one's name and user ID, and uses `ps` for an `ssh` command line.
   - It also reacts to `terminal.pwd_changed`. While an SSH session is the pane's program, the host in that report is the hop the pane is on. The watcher forgets it when that SSH session ends.
 - **No fighting between the two:** the watcher only replaces a label that signals less than its own (🔴 > 🟡 > 🌐 > anything else). When the context ends, it restores the label it replaced, but only if nothing else changed the label in the meantime. So in a hooked zsh, the hook's own labels win.
-- **Text colours (hook only):** the hook prints standard terminal escape sequences. OSC 10 sets the foreground and OSC 4 sets palette entries 0–15. OSC 104 / OSC 110 restore your theme. Only the 16 ANSI colours and the default foreground change, so 256-colour and true-colour output is untouched.
-- **Timing (hook):** a zsh `precmd` hook handles prompt-time state such as directory, kube, AWS and tofu. A `preexec` hook marks `ssh`/`mosh`/`sudo`/`su`/`doas` just before they start, so the label and colours are in place for the password prompt and the whole session. The `precmd` hook is placed before Powerlevel10k's, so the prompt segment always shows the current state.
+- **Text colors (hook only):** the hook prints standard terminal escape sequences. OSC 10 sets the foreground and OSC 4 sets palette entries 0–15. OSC 104 / OSC 110 restore your theme. Only the 16 ANSI colors and the default foreground change, so 256-color and true-color output is untouched.
+- **Timing (hook):** a zsh `precmd` hook handles prompt-time state such as directory, kube, AWS and tofu. A `preexec` hook marks `ssh`/`mosh`/`sudo`/`su`/`doas` just before they start, so the label and colors are in place for the password prompt and the whole session. The `precmd` hook is placed before Powerlevel10k's, so the prompt segment always shows the current state.
 
 ### Limitations
 
-- **The hook doesn't tint the background yet.** Since the 2026-11-03 release, Rex draws a background that a program in the pane sets with OSC 11, and `OSC 111` restores the theme. The hook still only recolours the text, so for now the highlight is the label plus the text colours.
-- **The watcher can't tint or recolour anything.** Rex only takes colours from the program in the pane. The server's `com.superlogical.terminal.set_theme` method has no visible effect in the Mac app. `com.superlogical.terminal.write` sends bytes to the program's input, not to the screen. Per-pane tinting from the API is an open feature request in the Rex Beta Discord ("Support tinting or theming of individual panes").
-- **Switching the app theme is all-or-nothing.** The Mac app's `client.theme.change` action recolours every pane, so it isn't used here.
-- **Only the hook can recolour text.** Panes the watcher catches on its own (bash, aliases, panes launched directly into a program, and production hosts behind a bastion) get the label but keep the theme's colours.
+- **The hook doesn't tint the background yet.** Since the 2026-11-03 release, Rex draws a background that a program in the pane sets with OSC 11, and `OSC 111` restores the theme. The hook still only recolors the text, so for now the highlight is the label plus the text colors.
+- **The watcher can't tint or recolor anything.** Rex only takes colors from the program in the pane. The server's `com.superlogical.terminal.set_theme` method has no visible effect in the Mac app. `com.superlogical.terminal.write` sends bytes to the program's input, not to the screen. Per-pane tinting from the API is an open feature request in the Rex Beta Discord ("Support tinting or theming of individual panes").
+- **Switching the app theme is all-or-nothing.** The Mac app's `client.theme.change` action recolors every pane, so it isn't used here.
+- **Only the hook can recolor text.** Panes the watcher catches on its own (bash, aliases, panes launched directly into a program, and production hosts behind a bastion) get the label but keep the theme's colors.
 - **Hosts behind a bastion are only seen if their shells report OSC 7.** See [Through a bastion](#through-a-bastion). Without a report from the bastion, the label isn't restored when you return to it, only when the SSH session ends.
-- **The watcher only checks hosts for `ssh` and `autossh`.** `mosh-client`, `kubectl exec` and the rest are labelled remote but never PROD, because their command lines don't carry a reliable host name.
+- **The watcher only checks hosts for `ssh` and `autossh`.** `mosh-client`, `kubectl exec` and the rest are labeled remote but never PROD, because their command lines don't carry a reliable host name.
 - **sudo is only marked while something runs as root.** There's no SUDO marker for the time afterwards when sudo can run again without a password. Checking that with `sudo -n` would write an entry to the system log each time.
 - **Remote work is identified by host name or program, not content.** What you do on the remote machine isn't inspected. A Rex host only gets the hook's checks if the hook is installed there too, and the watcher only sees panes on the server it runs against (your Mac).
 - **Manual labels get overwritten.** A label you set by hand is replaced the next time the context changes.
 
 ### Troubleshooting
 
-**A pane isn't labelled or coloured at all.** The hook isn't loaded in that shell. Check that the `source` line is in `~/.zshrc` with `grep prod-highlight ~/.zshrc`. Then run `exec zsh` in that pane, or open a new one. A shell that was already running when you added the line doesn't pick it up on its own.
+**A pane isn't labeled or colored at all.** The hook isn't loaded in that shell. Check that the `source` line is in `~/.zshrc` with `grep prod-highlight ~/.zshrc`. Then run `exec zsh` in that pane, or open a new one. A shell that was already running when you added the line doesn't pick it up on its own.
 
-**A root shell (`sudo su -`, `sudo -i`) is labelled SUDO but its text isn't yellow.** The watcher labelled it, but the colours only come from the hook. Make sure the root shell was started from a zsh that has the hook loaded (see above). Exit the root shell, run `exec zsh`, then start it again.
+**A root shell (`sudo su -`, `sudo -i`) is labeled SUDO but its text isn't yellow.** The watcher labeled it, but the colors only come from the hook. Make sure the root shell was started from a zsh that has the hook loaded (see above). Exit the root shell, run `exec zsh`, then start it again.
 
-**Do I need to make root's shell zsh (`chsh`)?** No. The hook runs in *your* zsh, just before `sudo` starts, and the watcher reads the pane's processes from outside. The label and text colours belong to the Rex pane, so they stay in place whatever shell root uses (bash, sh, zsh). Changing root's shell wouldn't help anyway. Root's zsh reads root's config, not yours, and `sudo su -` clears `REX_SESSION` and `REX_BLOCK`, which the hook needs to find its pane.
+**Do I need to make root's shell zsh (`chsh`)?** No. The hook runs in *your* zsh, just before `sudo` starts, and the watcher reads the pane's processes from outside. The label and text colors belong to the Rex pane, so they stay in place whatever shell root uses (bash, sh, zsh). Changing root's shell wouldn't help anyway. Root's zsh reads root's config, not yours, and `sudo su -` clears `REX_SESSION` and `REX_BLOCK`, which the hook needs to find its pane.
 
-**Remote sessions from aliases or scripts aren't labelled.** The watcher isn't running. Check it with `launchctl print gui/$(id -u)/io.github.nckroy.rex-context-watch | grep state`, look in `~/Library/Logs/rex-context-watch.log`, or run `./install.sh` again.
+**Remote sessions from aliases or scripts aren't labeled.** The watcher isn't running. Check it with `launchctl print gui/$(id -u)/io.github.nckroy.rex-context-watch | grep state`, look in `~/Library/Logs/rex-context-watch.log`, or run `./install.sh` again.
 
 **My Mac shows up as `🌐` remote.** You've set `REX_LOCAL_HOSTS` but left this Mac out. Add its short hostname (`hostname -s`).
 
@@ -197,7 +197,7 @@ REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colours...)   # yellow text pale
 
 Files: [`claude-usage/`](claude-usage/): [`usage_report.py`](claude-usage/usage_report.py) (report), [`usage_loop.sh`](claude-usage/usage_loop.sh) (refresh loop), [`rex_session_start.sh`](claude-usage/rex_session_start.sh) (Claude Code hook), [`install.sh`](claude-usage/install.sh)
 
-When you start [Claude Code](https://claude.com/claude-code) in a Rex pane, this opens a pane to its right with a colour report of your Claude usage, refreshed every 30 seconds:
+When you start [Claude Code](https://claude.com/claude-code) in a Rex pane, this opens a pane to its right with a color report of your Claude usage, refreshed every 30 seconds:
 
 - **This session:** span, requests, uncached input, cache writes and reads, output (and thinking), total tokens, cache hit rate, usage by model, subagent requests, output by hour and the largest context additions.
 - **Context:** the tokens the latest main-thread request carried, the peak and starting size, likely compactions (a drop of more than half), and a sparkline of growth over the session.

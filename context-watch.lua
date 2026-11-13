@@ -13,7 +13,7 @@
 --   * a second hop through a bastion: while an ssh session runs, a shell on
 --     the far side that reports its directory (OSC 7, file://host/path) names
 --     the host the pane is really on, so "ssh bastion" then "ssh db1.prod"
---     is labelled PROD
+--     is labeled PROD
 --
 -- Labels use the same scheme as the hook:
 --   🔴 PROD · …   remote target looks like production
@@ -23,7 +23,7 @@
 -- It never downgrades a label: it only replaces a label that signals less
 -- (🔴 > 🟡 > 🌐/🟢 > anything else), and when the context ends it restores the
 -- previous label, but only if nobody changed the label in the meantime.
--- It can't recolour text; only the zsh hook can do that.
+-- It can't recolor text; only the zsh hook can do that.
 
 -- Words that mark a host as production, matched against the host name split
 -- on non-alphanumeric characters (so "db1.prod.example" and "web-prd-2" match,
