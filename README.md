@@ -13,6 +13,7 @@ Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on m
 | **Context-coded panes** | Labels and colors each pane by what it's working against: 🔴 PROD, 🟡 SUDO, 🌐 remote or 💻 local | [docs/context-coded-panes.md](docs/context-coded-panes.md) |
 | **Claude usage pane** | Opens a live report of your Claude Code usage beside Claude when it starts | [docs/claude-usage-pane.md](docs/claude-usage-pane.md) |
 | **Work calendar pane** | A text-mode view of your Outlook calendar, fed by Claude's Microsoft 365 connector | [docs/work-calendar.md](docs/work-calendar.md) |
+| **Obsidian vault pane** | Opens an Obsidian vault or note in emeraldian, a terminal UI for Obsidian, beside the current pane | [docs/vault-pane.md](docs/vault-pane.md) |
 
 ### Context-coded panes
 
@@ -35,6 +36,12 @@ Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on m
 - Week strip, week view, and navigation by day and by week.
 - Fetches through a locked-down headless `claude -p`. The model never reads your events, and several panes share one cache.
 - When the Claude usage pane is installed, it opens above that pane each time you start `claude`.
+
+### Obsidian vault pane
+
+- Opens a vault, a note, today's daily note or the graph view in [emeraldian](https://github.com/iamrohithrnair/emeraldian), in a pane beside this one.
+- Keeps one vault pane per Rex session, so running it again replaces the last one.
+- Prints the new pane's block ID, so scripts and Claude can open a note they just wrote and close it later.
 
 ## Install
 
@@ -64,6 +71,13 @@ claude-usage/install.sh
 ```sh
 work-calendar/install.sh
 workcal-pane          # open it now, to the right of this pane
+```
+
+**Obsidian vault pane** (needs [emeraldian](https://github.com/iamrohithrnair/emeraldian) and `jq`):
+
+```sh
+vault-pane/install.sh
+vault-pane ~/Notes    # open a vault to the right of this pane
 ```
 
 Each installer takes `uninstall`. The docs for each add-on cover requirements, settings, checks and troubleshooting.
