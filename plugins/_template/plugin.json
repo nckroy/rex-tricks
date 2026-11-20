@@ -1,0 +1,14 @@
+{
+  "name": "my-plugin",
+  "description": "One line on what this plugin does",
+  "requires": { "commands": [] },
+  "pane": {
+    "label": "🕒 my-plugin",
+    "command": ["{dir}/pane.sh"],
+    "height": 0.2,
+    "min_rows": 0
+  },
+  "settings": {
+    "MY_PLUGIN_INTERVAL": { "default": "1", "description": "seconds between redraws" }
+  }
+}

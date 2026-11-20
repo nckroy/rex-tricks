@@ -1,0 +1,14 @@
+{
+  "name": "claude-usage",
+  "description": "Live report of this Claude Code session's token usage, context and 5-hour window",
+  "requires": { "commands": ["python3"] },
+  "pane": {
+    "label": "Claude usage",
+    "command": ["{dir}/usage_loop.sh", "{claude_session_id}"],
+    "height": 0.35,
+    "keep_open": true
+  },
+  "settings": {
+    "USAGE_WIDTH": { "default": "", "description": "force the report's width in columns (default: the pane's)" }
+  }
+}

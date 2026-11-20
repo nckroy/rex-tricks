@@ -1,0 +1,7 @@
+{
+  "name": "vault-pane",
+  "description": "'vault-pane' command: open an Obsidian vault or note in emeraldian beside this pane",
+  "requires": { "commands": ["emeraldian", "jq"] },
+  "links": { "vault-pane": "vault-pane.sh" },
+  "hooks": { "uninstall": "hooks/uninstall.sh" }
+}

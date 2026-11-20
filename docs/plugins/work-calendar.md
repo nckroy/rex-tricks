@@ -1,6 +1,6 @@
 # Work calendar pane
 
-Files: [`work-calendar/`](../work-calendar/): [`workcal.py`](../work-calendar/workcal.py) (calendar), [`workcal-pane.sh`](../work-calendar/workcal-pane.sh) (opens it in a Rex pane), [`install.sh`](../work-calendar/install.sh)
+Plugin: [`plugins/work-calendar/`](../../plugins/work-calendar/): [`workcal.py`](../../plugins/work-calendar/workcal.py) (calendar), [`workcal-pane.sh`](../../plugins/work-calendar/workcal-pane.sh) (opens it in a Rex pane), [`plugin.json`](../../plugins/work-calendar/plugin.json)
 
 A text-mode view of your Outlook (Microsoft 365) calendar for a Rex pane. Its events come from Claude's Microsoft 365 connector, so you don't need an ICS link, an app registration or an account in macOS Calendar.
 
@@ -28,7 +28,7 @@ No program outside Claude can call a claude.ai connector, so each fetch runs a h
 - The prompt asks for all the pages of one week in a single turn of parallel calls. `--max-turns 1` stops the run as soon as they return, so the model never reads your events, and text in an event can't steer it.
 - The events are taken from the raw tool results in the `stream-json` output, not from anything the model writes. Results from a call with different dates than were asked for are ignored.
 - Every event carries its position in the result set, so the fetcher checks it got all of them and asks again for any missing pages.
-- `REX_*` variables are removed from the run's environment, so Claude Code hooks that open Rex panes (like the [Claude usage pane](claude-usage-pane.md)) don't fire.
+- `REX_*` variables are removed from the run's environment, so Claude Code hooks that open Rex panes (like the [Claude usage pane](claude-usage.md)) don't fire.
 
 Pages hold 15 events, because the connector's larger pages are spilled to a file instead of being returned inline. A week of about 50 events takes about 10 seconds and costs about $0.015.
 
@@ -44,19 +44,19 @@ Graph labels times with Windows zone names (`Mountain Standard Time`). The pane 
 ## Install
 
 ```sh
-work-calendar/install.sh
+rex-tricks enable work-calendar --at 1
 ```
 
-This copies the scripts to `~/.config/rex/work-calendar/` and links `workcal` and `workcal-pane` into `~/.local/bin`.
-
-If the [Claude usage pane](claude-usage-pane.md) is installed too, its hook opens the calendar above the usage pane every time you start `claude` in Rex; run `claude-usage/install.sh` again after pulling, so the installed hook script includes the calendar. You can also open it yourself, in any Rex pane:
+This links `workcal` and `workcal-pane` into `~/.local/bin` and puts the calendar at the top of the [Claude column](../configuration.md#the-claude-column), so it opens beside Claude every time you start `claude` in Rex. To have the commands without the column pane, run `rex-tricks column` with the column's other panes afterwards. You can also open it yourself, in any Rex pane:
 
 ```sh
 workcal-pane            # open the calendar to the right
 workcal-pane --below    # or below
 ```
 
-`workcal` runs the calendar in the current terminal. `workcal --agenda [YYYY-MM-DD]` prints one day as plain text, and `workcal --fetch [YYYY-MM-DD]` fetches the week containing that date and prints it as JSON, which is useful for checking the connector. `workcal --demo` shows a week of made-up meetings and never fetches. Use it for screenshots, so your real calendar stays out of them. `work-calendar/install.sh uninstall` removes the links and the cache.
+`workcal` runs the calendar in the current terminal. `workcal --agenda [YYYY-MM-DD]` prints one day as plain text, and `workcal --fetch [YYYY-MM-DD]` fetches the week containing that date and prints it as JSON, which is useful for checking the connector. `workcal --demo` shows a week of made-up meetings and never fetches. Use it for screenshots, so your real calendar stays out of them. `rex-tricks disable work-calendar` removes the links and the cache.
+
+Settings, set with `rex-tricks set work-calendar NAME VALUE`: `WORKCAL_REFRESH_MIN` (minutes between refreshes, default 15), `WORKCAL_MODEL` (model for the fetch run, default `haiku`) and `WORKCAL_CLAUDE` (the `claude` binary).
 
 | Variable | Default | Effect |
 |---|---|---|

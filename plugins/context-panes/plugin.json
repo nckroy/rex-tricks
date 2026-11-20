@@ -1,0 +1,6 @@
+{
+  "name": "context-panes",
+  "description": "Labels and colors panes by what they work against: PROD, SUDO, remote or local",
+  "requires": { "commands": ["rex", "jq"] },
+  "hooks": { "install": "hooks/install.sh", "uninstall": "hooks/uninstall.sh" }
+}

@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""rex-tricks: install, enable and arrange plugins for the Rex terminal.
+
+  rex-tricks list                     plugins found, and which are enabled
+  rex-tricks info NAME                a plugin's manifest and your settings for it
+  rex-tricks enable NAME [--at N]     enable and install a plugin (a pane goes into the
+                                      Claude column at position N, from 1; default last)
+  rex-tricks disable NAME             uninstall a plugin and turn it off
+  rex-tricks column [NAME ...]        show or set the Claude column, top to bottom
+  rex-tricks set NAME KEY VALUE       set pane.label|command|height|min_rows|keep_open,
+                                      or a setting, e.g. 'set btop pane.min_rows 30'
+  rex-tricks unset NAME KEY           go back to the plugin's default
+  rex-tricks install                  copy files into place and install enabled plugins
+  rex-tricks setup                    install, first adopting what older installers set up
+  rex-tricks uninstall                remove hooks and links for every plugin (keeps config)
+  rex-tricks check                    validate plugins and config; non-zero exit on errors
+  rex-tricks new NAME                 start a plugin of your own in plugins.d/NAME
+
+Files live in ~/.config/rex-tricks (REX_TRICKS_HOME): config.json, plugins/ (built-ins),
+plugins.d/ (yours). More plugin folders can be listed in REX_TRICKS_PLUGIN_PATH.
+"""
+import os, sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "core"))
+
+import argparse, json, shutil  # noqa: E402
+from rextricks import config, home, install, column  # noqa: E402
+from rextricks.manifest import validate_pane, SETTING_RE  # noqa: E402
+from rextricks.registry import Registry  # noqa: E402
+
+# Commands that link or run files: from a checkout, copy the files into place first and run
+# the installed copy, so links and LaunchAgents never point into the checkout.
+INSTALLED_ONLY = {"enable", "disable", "install", "setup", "uninstall"}
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="rex-tricks", description=__doc__.split("\n")[0],
+                                 epilog=__doc__.split("\n", 2)[2],
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", metavar="COMMAND")
+    sub.add_parser("list")
+    sub.add_parser("info").add_argument("name")
+    p = sub.add_parser("enable"); p.add_argument("name"); p.add_argument("--at", type=int)
+    sub.add_parser("disable").add_argument("name")
+    sub.add_parser("column").add_argument("names", nargs="*")
+    p = sub.add_parser("set"); p.add_argument("name"); p.add_argument("key"); p.add_argument("value")
+    p = sub.add_parser("unset"); p.add_argument("name"); p.add_argument("key")
+    sub.add_parser("install")
+    sub.add_parser("setup")
+    sub.add_parser("uninstall").add_argument("--all", action="store_true", help=argparse.SUPPRESS)
+    sub.add_parser("check")
+    sub.add_parser("new").add_argument("name")
+    sub.add_parser("claude-hook")          # internal: run by core/claude_hook.sh
+    sub.add_parser("column-fit").add_argument("args")  # internal: detached by claude-hook
+    a = ap.parse_args(argv)
+    if not a.cmd:
+        ap.print_help()
+        return 0
+
+    if a.cmd in INSTALLED_ONLY and os.path.realpath(ROOT) != os.path.realpath(home()):
+        print(f"Copying rex-tricks to {home()}")
+        install.sync()
+        cli = os.path.join(home(), "bin", "rex-tricks")
+        os.execv(sys.executable, [sys.executable, "-I", cli] + argv)
+
+    return globals()["cmd_" + a.cmd.replace("-", "_")](a)
+
+
+# ---- commands ------------------------------------------------------------------------------
+
+def cmd_list(a):
+    reg, cfg = Registry(), config.load()
+    enabled, col = cfg["enabled"], cfg["column"]["panes"]
+    rows = []
+    for name in sorted(reg.plugins):
+        p = reg.plugins[name]
+        state = "on" if name in enabled else "off"
+        if name in col:
+            state += f" (column {col.index(name) + 1})"
+        missing = p.missing()
+        rows.append((name, state, "+".join(p.kinds()) or "-",
+                     ("needs " + ", ".join(missing)) if missing else p.description,
+                     "" if p.source == "builtin" else f"[{p.source}: {p.dir}]"))
+    w = [max(len(r[i]) for r in rows) for i in range(3)] if rows else [0, 0, 0]
+    for r in rows:
+        print(f"{r[0]:<{w[0]}}  {r[1]:<{w[1]}}  {r[2]:<{w[2]}}  {r[3]} {r[4]}".rstrip())
+    for e in reg.errors:
+        print(f"\nnot loaded: {e}", file=sys.stderr)
+    return 0
+
+
+def cmd_info(a):
+    reg, cfg = Registry(), config.load()
+    p = reg.get(a.name)
+    print(f"{p.name}: {p.description}")
+    print(f"  folder:   {p.dir} ({p.source})")
+    print(f"  kind:     {', '.join(p.kinds()) or '-'}")
+    print(f"  enabled:  {'yes' if p.name in cfg['enabled'] else 'no'}")
+    if p.missing():
+        print(f"  needs:    {', '.join(p.missing())}")
+    if p.links:
+        print(f"  commands: {', '.join(p.links)}")
+    if p.pane:
+        print(f"  pane:     {json.dumps(config.effective_pane(p, cfg), ensure_ascii=False)}")
+    if p.settings:
+        values = config.effective_settings(p, cfg)
+        print("  settings:")
+        for k, s in p.settings.items():
+            kv = f"{k}={values.get(k, '')}"
+            print(f"    {kv:<28} {s.get('description', '')}")
+    return 0
+
+
+def cmd_enable(a):
+    reg, cfg = Registry(), config.load()
+    p = reg.get(a.name)
+    if p.name not in cfg["enabled"]:
+        cfg["enabled"].append(p.name)
+    if p.pane:
+        col = [n for n in cfg["column"]["panes"] if n != p.name]
+        at = len(col) if a.at is None else min(max(a.at - 1, 0), len(col))
+        col.insert(at, p.name)
+        cfg["column"]["panes"] = col
+    config.save(cfg)
+    install.install_plugin(p, cfg)
+    sync_claude_hook(reg, cfg)
+    return 0
+
+
+def cmd_disable(a):
+    reg, cfg = Registry(), config.load()
+    p = reg.get(a.name)
+    install.uninstall_plugin(p, cfg)
+    cfg["enabled"] = [n for n in cfg["enabled"] if n != p.name]
+    cfg["column"]["panes"] = [n for n in cfg["column"]["panes"] if n != p.name]
+    config.save(cfg)
+    sync_claude_hook(reg, cfg)
+    return 0
+
+
+def cmd_column(a):
+    reg, cfg = Registry(), config.load()
+    if a.names:
+        for n in a.names:
+            if not reg.get(n).pane:
+                raise SystemExit(f"rex-tricks: '{n}' has no pane")
+        cfg["column"]["panes"] = list(dict.fromkeys(a.names))
+        off = [n for n in a.names if n not in cfg["enabled"]]
+        if off:
+            print(f"note: not enabled, so not opened until you enable them: {', '.join(off)}")
+        config.save(cfg)
+        sync_claude_hook(reg, cfg)
+    for i, n in enumerate(cfg["column"]["panes"], 1):
+        print(f"{i}. {n}")
+    if not cfg["column"]["panes"]:
+        print("(empty: Claude Code starts without a column)")
+    return 0
+
+
+def _key(p, key):
+    if key.startswith("pane."):
+        return "pane", key[5:]
+    k = key[9:] if key.startswith("settings.") else key
+    if not SETTING_RE.match(k):
+        raise SystemExit(f"rex-tricks: '{key}' isn't pane.<field> or a setting name")
+    if k not in p.settings:
+        print(f"note: {p.name} doesn't declare {k}; it's still passed to it in the environment")
+    return "settings", k
+
+
+def cmd_set(a):
+    reg, cfg = Registry(), config.load()
+    p = reg.get(a.name)
+    section, k = _key(p, a.key)
+    value = a.value
+    if section == "pane":
+        if not p.pane:
+            raise SystemExit(f"rex-tricks: '{p.name}' has no pane")
+        try:
+            value = json.loads(value)
+        except ValueError:
+            pass  # a plain string, such as a label
+        errs = validate_pane({k: value}, full=False)
+        if errs:
+            raise SystemExit("rex-tricks: " + "; ".join(errs))
+    cfg["plugins"].setdefault(p.name, {}).setdefault(section, {})[k] = value
+    config.save(cfg)
+    print(f"{p.name}: {section}.{k} = {json.dumps(value, ensure_ascii=False)}")
+    return 0
+
+
+def cmd_unset(a):
+    reg, cfg = Registry(), config.load()
+    p = reg.get(a.name)
+    section, k = _key(p, a.key)
+    over = cfg["plugins"].get(p.name, {})
+    over.get(section, {}).pop(k, None)
+    for s in [s for s in over if not over[s]]:
+        del over[s]
+    if not over:
+        cfg["plugins"].pop(p.name, None)
+    config.save(cfg)
+    return 0
+
+
+def cmd_install(a):
+    reg, cfg = Registry(), config.load()
+    errs = config.validate(cfg, reg)
+    if errs:
+        raise SystemExit(f"rex-tricks: problems in {config.path()}:\n  " + "\n  ".join(errs))
+    if not config.exists():
+        config.save(cfg)
+    print("Installing plugins:" if cfg["enabled"] else "No plugins enabled; see 'rex-tricks list'.")
+    for n in cfg["enabled"]:
+        install.install_plugin(reg.get(n), cfg)
+    sync_claude_hook(reg, cfg)
+    return 0
+
+
+def cmd_setup(a):
+    reg = Registry()
+    if not config.exists():
+        cfg, found = install.detect_old(reg)
+        config.save(cfg)
+        if found:
+            print(f"Found earlier installs of: {', '.join(found)}. Enabled them.")
+    cmd_install(a)
+    old = install.leftovers()
+    if old:
+        print("\nThese are left over from the old installers and are no longer used. Delete them when you like:")
+        for p in old:
+            print(f"  {p}")
+    print("\nNext: 'rex-tricks list' to see plugins, 'rex-tricks enable NAME' to add one.")
+    return 0
+
+
+def cmd_uninstall(a):
+    reg, cfg = Registry(), config.load()
+    for n in cfg["enabled"]:
+        if n in reg.plugins:
+            install.uninstall_plugin(reg.plugins[n], cfg)
+    if install.set_claude_hook(False):
+        print(f"Removed the Claude Code hook from {install.settings_path()}.")
+    install.unlink("rex-tricks", None)
+    print(f"Done. Files and config in {home()} were left in place.")
+    return 0
+
+
+def cmd_check(a):
+    reg, cfg = Registry(), config.load()
+    problems = list(reg.errors)
+    problems += [f"{config.path()}: {e}" for e in config.validate(cfg, reg)]
+    for name, old, new in reg.clashes:
+        print(f"warning: '{name}' in {new} overrides the one in {old}")
+    for name in sorted(reg.plugins):
+        p = reg.plugins[name]
+        missing = p.missing()
+        print(f"ok  {name}" + (f"  (warning: needs {', '.join(missing)})" if missing else ""))
+    for e in problems:
+        print(f"ERROR  {e}")
+    return 1 if problems else 0
+
+
+def cmd_new(a):
+    from rextricks.manifest import NAME_RE
+    if not NAME_RE.match(a.name):
+        raise SystemExit("rex-tricks: names are lowercase letters, digits and dashes")
+    dst = os.path.join(home(), "plugins.d", a.name)
+    if os.path.exists(dst):
+        raise SystemExit(f"rex-tricks: {dst} already exists")
+    shutil.copytree(os.path.join(ROOT, "plugins", "_template"), dst)
+    mf = os.path.join(dst, "plugin.json")
+    with open(mf) as f:
+        text = f.read().replace("my-plugin", a.name)
+    with open(mf, "w") as f:
+        f.write(text)
+    print(f"Created {dst}. Edit plugin.json, then 'rex-tricks check' and 'rex-tricks enable {a.name}'.")
+    return 0
+
+
+def cmd_claude_hook(a):
+    session, block = os.environ.get("REX_SESSION"), os.environ.get("REX_BLOCK")
+    if not session or not block:
+        return 0
+    try:
+        sid = json.load(sys.stdin).get("session_id", "")
+    except ValueError:
+        return 0
+    if sid:
+        column.open_column(session, block, sid)
+    return 0
+
+
+def cmd_column_fit(a):
+    args = json.loads(a.args)
+    column.fit(args["session"], args["blocks"], args["mins"], args["floor"],
+               args.get("anchor"), args.get("width"))
+    return 0
+
+
+def sync_claude_hook(reg, cfg):
+    """The Claude Code hook is needed while any enabled plugin is in the column."""
+    want = any(n in cfg["enabled"] and reg.plugins.get(n) and reg.plugins[n].pane
+               for n in cfg["column"]["panes"])
+    if install.set_claude_hook(want):
+        print(("Added the Claude Code hook to " if want else "Removed the Claude Code hook from ")
+              + install.settings_path())
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

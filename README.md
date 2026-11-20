@@ -1,19 +1,22 @@
 # rex-tricks
 
-Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on macOS.
+Plugins for the [Rex](https://www.superlogical.com/rex/docs) terminal on macOS, and `rex-tricks`, a small tool that installs them and arranges the column of panes that opens beside Claude Code.
 
 ![A Rex window in three columns. On the left, two context-coded panes: one labeled PROD · kube eks-prod-east, aws acme-prod, dir prod, with red text and the red ⚠ PROD prompt segment, and one labeled SUDO · port selfupdate. In the middle, the Obsidian vault pane shows a sample daily note in emeraldian. On the right, the work calendar shows a day of sample meetings above btop and the Claude usage report.](docs/demo.png)
 
-*Left: two [context-coded panes](docs/context-coded-panes.md), a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, and a `sudo` command. Middle: the [Obsidian vault pane](docs/vault-pane.md) on a sample vault. Right: the column the Claude Code hook opens beside Claude, with the [work calendar](docs/work-calendar.md) showing made-up meetings from its `--demo` mode, btop sized to its 24-row minimum, and the [Claude usage pane](docs/claude-usage-pane.md). Host names are examples.*
+*Left: two [context-coded panes](docs/plugins/context-panes.md), a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, and a `sudo` command. Middle: the [Obsidian vault pane](docs/plugins/vault-pane.md) on a sample vault. Right: the [Claude column](docs/configuration.md#the-claude-column) that opens beside Claude, with the [work calendar](docs/plugins/work-calendar.md) showing made-up meetings from its `--demo` mode, btop sized to its 24-row minimum, and the [Claude usage pane](docs/plugins/claude-usage.md). Host names are examples.*
 
-## Add-ons
+## Plugins
 
-| Add-on | What it does | Docs |
+| Plugin | What it does | Docs |
 |---|---|---|
-| **Context-coded panes** | Labels and colors each pane by what it's working against: 🔴 PROD, 🟡 SUDO, 🌐 remote or 💻 local | [docs/context-coded-panes.md](docs/context-coded-panes.md) |
-| **Claude usage pane** | Opens a live report of your Claude Code usage beside Claude when it starts | [docs/claude-usage-pane.md](docs/claude-usage-pane.md) |
-| **Work calendar pane** | A text-mode view of your Outlook calendar, fed by Claude's Microsoft 365 connector | [docs/work-calendar.md](docs/work-calendar.md) |
-| **Obsidian vault pane** | Opens an Obsidian vault or note in emeraldian, a terminal UI for Obsidian, beside the current pane | [docs/vault-pane.md](docs/vault-pane.md) |
+| `context-panes` | Labels and colors each pane by what it's working against: 🔴 PROD, 🟡 SUDO, 🌐 remote or 💻 local | [context-panes.md](docs/plugins/context-panes.md) |
+| `claude-usage` | A live report of your Claude Code usage, in the Claude column | [claude-usage.md](docs/plugins/claude-usage.md) |
+| `work-calendar` | A text-mode view of your Outlook calendar, fed by Claude's Microsoft 365 connector, in the Claude column or any pane | [work-calendar.md](docs/plugins/work-calendar.md) |
+| `btop` | The btop system monitor in the Claude column, given the 24 rows it needs | [btop.md](docs/plugins/btop.md) |
+| `vault-pane` | Opens an Obsidian vault or note in emeraldian, a terminal UI for Obsidian, beside the current pane | [vault-pane.md](docs/plugins/vault-pane.md) |
+
+The **Claude column** is the stack of panes that opens to the right of Claude Code whenever you start `claude` in Rex. You choose which plugins go in it and in what order, and rex-tricks gives each pane its share of the height and at least the rows it needs. See [configuration](docs/configuration.md).
 
 ### Context-coded panes
 
@@ -23,20 +26,19 @@ Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on m
 - Catches remote sessions however they start: `ssh`, `mosh`, `kubectl exec`, `docker exec`, `aws ssm`, `tailscale ssh` and aliases or scripts that run them.
 - Follows a second SSH hop through a bastion when the far shells report their host (OSC 7).
 
-### Claude usage pane
+### Claude usage
 
-- Opens to the right of Claude Code whenever you start `claude` in Rex, and refreshes every 30 seconds.
-- Adds a `btop` system monitor above the report when btop is installed.
+- Opens in the Claude column whenever you start `claude` in Rex, and refreshes every 30 seconds.
 - Shows this session's tokens, cache hit rate, models, subagents and output by hour.
 - Shows context size and growth, with likely compactions.
 - Shows the current 5-hour window, with time left and per-session totals.
 
-### Work calendar pane
+### Work calendar
 
 - Day view with a `now` line and a countdown to your next meeting. Conflicts are marked, and you can join a meeting's Zoom link with one key.
 - Week strip, week view, and navigation by day and by week.
 - Fetches through a locked-down headless `claude -p`. The model never reads your events, and several panes share one cache.
-- When the Claude usage pane is installed, it opens above that pane each time you start `claude`.
+- Opens at the top of the Claude column each time you start `claude`, or anywhere with `workcal-pane`.
 
 ### Obsidian vault pane
 
@@ -46,49 +48,39 @@ Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on m
 
 ## Install
 
-You need Rex on macOS with the `rex` CLI on `PATH`. Each add-on installs on its own. Run its installer from your clone of this repo, and run it again after you pull updates.
-
-**Context-coded panes** (needs `jq`; Powerlevel10k is optional):
+You need Rex on macOS with the `rex` CLI on `PATH`, and `python3` 3.9 or later (the one that comes with macOS will do). From your clone of this repo:
 
 ```sh
 ./install.sh
 ```
 
-Then add this line to the **end** of `~/.zshrc`, after Powerlevel10k is loaded, and open a new pane:
+This copies rex-tricks to `~/.config/rex-tricks` and links the `rex-tricks` command into `~/.local/bin`. If you used the older per-add-on installers, it enables the same add-ons as plugins and takes over their hooks. Then turn on the plugins you want:
+
+```sh
+rex-tricks list                       # what there is, and what each one needs
+rex-tricks enable claude-usage        # panes join the Claude column...
+rex-tricks enable work-calendar --at 1    # ...at the position you give
+rex-tricks enable btop --at 2
+rex-tricks enable vault-pane
+rex-tricks enable context-panes
+```
+
+Each plugin's doc lists what it needs: `jq`, emeraldian, Claude Code with the Microsoft 365 connector, and so on. Context-coded panes also need one line at the **end** of `~/.zshrc`, after Powerlevel10k is loaded:
 
 ```zsh
 # Rex: context-coded panes (PROD / SUDO / local). Keep after p10k is loaded.
 [[ -r ~/.config/rex/prod-highlight.zsh ]] && source ~/.config/rex/prod-highlight.zsh
 ```
 
-**Claude usage pane** (needs Claude Code, `python3` and `jq`):
-
-```sh
-claude-usage/install.sh
-```
-
-**Work calendar pane** (needs Claude Code signed in to claude.ai with the Microsoft 365 connector connected, and `python3`):
-
-```sh
-work-calendar/install.sh
-workcal-pane          # open it now, to the right of this pane
-```
-
-**Obsidian vault pane** (needs [emeraldian](https://github.com/iamrohithrnair/emeraldian) and `jq`):
-
-```sh
-vault-pane/install.sh
-vault-pane ~/Notes    # open a vault to the right of this pane
-```
-
-Each installer takes `uninstall`. The docs for each add-on cover requirements, settings, checks and troubleshooting.
+Run `./install.sh` again after you pull updates. `./install.sh uninstall` removes every hook, link and LaunchAgent, and keeps your settings. [Configuration](docs/configuration.md) covers the column, per-plugin settings and `config.json`.
 
 ## Contributing
 
-Issues and pull requests are welcome.
+Issues and pull requests are welcome, and new plugins especially.
 
-- **One folder or file set per add-on,** each with its own `install.sh` that copies files into place (a LaunchAgent can't read `~/Documents` without privacy prompts) and supports `uninstall`.
-- **Document an add-on in `docs/<add-on>.md`:** what it does, requirements, install, settings, how it works and limitations. Add a row to the table above and a few bullets about what it does. Keep the details out of this README.
-- **Test in Rex,** in a real pane, at narrow and wide sizes. `rex block capture -b <block>` prints a pane's screen.
+- **A plugin is a folder under `plugins/` with a `plugin.json`.** [Writing a plugin](docs/writing-plugins.md) covers the manifest, hooks and settings. `rex-tricks new NAME` starts one in `~/.config/rex-tricks/plugins.d/`, where you can try it before moving it into the repo.
+- **Run the checks:** `bin/rex-tricks check` and `python3 -m unittest discover tests`. Run them on `/usr/bin/python3` too, which is 3.9.
+- **Document a plugin in `docs/plugins/<name>.md`:** what it does, requirements, install, settings, how it works and limitations. Add a row to the table above and a few bullets about what it does. Keep the details out of this README.
+- **Test in Rex,** in a real pane, at narrow and wide sizes. `rex capture -b <block>` prints a pane's screen.
 - **Keep private data out of the repo.** Use example host names (`example.net`), and read real ones from local files such as `~/.config/rex/prod-hosts`.
 - **Write in American English,** in short, plain sentences.

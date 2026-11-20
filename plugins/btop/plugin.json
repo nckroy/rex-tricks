@@ -1,0 +1,11 @@
+{
+  "name": "btop",
+  "description": "btop system monitor, given at least the 24 rows it needs to draw",
+  "requires": { "commands": ["btop"] },
+  "pane": {
+    "label": "btop",
+    "command": ["btop"],
+    "height": 0.30,
+    "min_rows": 24
+  }
+}

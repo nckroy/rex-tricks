@@ -1,0 +1,40 @@
+{
+  "name": "work-calendar",
+  "description": "Text-mode Outlook calendar, fed by Claude's Microsoft 365 connector",
+  "requires": {
+    "commands": [
+      "claude",
+      "python3"
+    ]
+  },
+  "links": {
+    "workcal": "workcal.py",
+    "workcal-pane": "workcal-pane.sh"
+  },
+  "hooks": {
+    "uninstall": "hooks/uninstall.sh"
+  },
+  "pane": {
+    "label": "📅 Work calendar",
+    "command": [
+      "{python}",
+      "-I",
+      "{dir}/workcal.py"
+    ],
+    "height": 0.35
+  },
+  "settings": {
+    "WORKCAL_REFRESH_MIN": {
+      "default": "15",
+      "description": "minutes between automatic refreshes"
+    },
+    "WORKCAL_MODEL": {
+      "default": "haiku",
+      "description": "model for the fetch run"
+    },
+    "WORKCAL_CLAUDE": {
+      "default": "",
+      "description": "claude binary (default: claude on PATH)"
+    }
+  }
+}

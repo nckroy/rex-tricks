@@ -1,5 +1,7 @@
 # Obsidian vault pane
 
+Plugin: [`plugins/vault-pane/`](../../plugins/vault-pane/): [`vault-pane.sh`](../../plugins/vault-pane/vault-pane.sh), [`plugin.json`](../../plugins/vault-pane/plugin.json)
+
 `vault-pane` opens an Obsidian vault in [emeraldian](https://github.com/iamrohithrnair/emeraldian), a terminal UI for Obsidian, in a Rex pane beside the one you're in. It keeps one vault pane per Rex session: running it again closes the pane it opened last time and opens a new one.
 
 It's handy for reading a note that a script or Claude just wrote, such as a daily brief, without leaving the terminal.
@@ -13,10 +15,10 @@ It's handy for reading a note that a script or Claude just wrote, such as a dail
 ## Install
 
 ```sh
-vault-pane/install.sh
+rex-tricks enable vault-pane
 ```
 
-This copies `vault-pane.sh` to `~/.config/rex/vault-pane` and links `vault-pane` into `~/.local/bin`. Run `vault-pane/install.sh uninstall` to remove the link.
+This links `vault-pane` into `~/.local/bin`. Run `rex-tricks disable vault-pane` to remove the link.
 
 ## Use
 

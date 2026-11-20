@@ -1,6 +1,6 @@
 # Context-coded panes: PROD, SUDO, remote and local
 
-Files: [`prod-highlight.zsh`](../prod-highlight.zsh) (zsh hook), [`context-watch.lua`](../context-watch.lua) (process watcher), [`install.sh`](../install.sh)
+Plugin: [`plugins/context-panes/`](../../plugins/context-panes/): [`prod-highlight.zsh`](../../plugins/context-panes/prod-highlight.zsh) (zsh hook), [`context-watch.lua`](../../plugins/context-panes/context-watch.lua) (process watcher), [`hooks/install.sh`](../../plugins/context-panes/hooks/install.sh) (LaunchAgent)
 
 This add-on makes it obvious which Rex panes are working against production, which are running as root, which are on another machine, and which are just local. It changes each pane's label and, in zsh, the colors of the text. Two parts work together:
 
@@ -77,7 +77,7 @@ bastion.example.org
 *.live.example.org
 ```
 
-Open a new pane after editing the file (the hook reads it at shell start-up), and run `./install.sh` again to restart the watcher.
+Open a new pane after editing the file (the hook reads it at shell start-up), and run `rex-tricks install` to restart the watcher.
 
 | Signal | Where it looks | Hook | Watcher |
 |---|---|---|---|
@@ -99,17 +99,15 @@ The hook lists all matching reasons in the label, e.g. `🔴 PROD · kube eks-pr
 
 ## Install
 
-1. From your clone of this repo, run:
+1. Run:
 
    ```sh
-   ./install.sh
+   rex-tricks enable context-panes
    ```
 
-   This copies `prod-highlight.zsh` and `context-watch.lua` to `~/.config/rex/`. It then installs and starts a LaunchAgent (`io.github.nckroy.rex-context-watch`) that keeps the watcher running and restarts it if it stops (for example when Rex restarts). The log goes to `~/Library/Logs/rex-context-watch.log`.
+   This installs and starts a LaunchAgent (`io.github.nckroy.rex-context-watch`) that keeps the watcher running and restarts it if it stops (for example when Rex restarts). The log goes to `~/Library/Logs/rex-context-watch.log`. It also writes `~/.config/rex/prod-highlight.zsh`, a one-line file that loads the plugin's copy, so the line below keeps working wherever rex-tricks lives. **Run `./install.sh` from your clone again after pulling updates.**
 
-   The files are copied rather than linked because a LaunchAgent reading `~/Documents` or iCloud folders triggers macOS privacy prompts. **Run `./install.sh` again after pulling updates.**
-
-2. Add the `source` line to the **end** of `~/.zshrc`, after Powerlevel10k is loaded. `install.sh` doesn't touch your dotfiles, and without this line the hook never loads. One way to append it:
+2. Add the `source` line to the **end** of `~/.zshrc`, after Powerlevel10k is loaded. rex-tricks doesn't touch your dotfiles, and without this line the hook never loads. One way to append it:
 
    ```zsh
    cp ~/.zshrc ~/.zshrc.bak
@@ -127,7 +125,7 @@ The hook lists all matching reasons in the label, e.g. `🔴 PROD · kube eks-pr
 
 The watcher works on its own too. Without step 2 you get labels from the watcher, but no colors, no prompt segment, and no kube/AWS/tofu/directory checks.
 
-To try the watcher without installing it, run `rex do --all context-watch.lua` in a spare pane and press Ctrl-C to stop it. To remove the LaunchAgent, run `./install.sh uninstall`.
+To try the watcher without installing it, run `rex do --all plugins/context-panes/context-watch.lua` in a spare pane and press Ctrl-C to stop it. To remove the LaunchAgent, run `rex-tricks disable context-panes`.
 
 ## Customize
 
@@ -146,7 +144,7 @@ REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colors...)   # yellow text palet
 
 `REX_PROD_HOST_RE` defaults to `REX_PROD_NAME_RE`. Set it if your production hosts are named differently from your other production resources.
 
-**Watcher:** edit the tables at the top of `context-watch.lua`, then run `./install.sh` again:
+**Watcher:** edit the tables at the top of `plugins/context-panes/context-watch.lua`, then run `./install.sh` again:
 - `PROD_WORDS`: words that mark a host as production. Keep these in step with `REX_PROD_NAME_RE`.
 - Specific production hosts go in `~/.config/rex/prod-hosts` (see [What counts as production](#what-counts-as-production)), not in the script.
 - `REMOTE_ALWAYS` and `REMOTE_SUBCOMMANDS`: which programs count as a remote session.
@@ -181,6 +179,6 @@ REX_SUDO_FG='#fff3c4';  REX_SUDO_PALETTE=(...16 colors...)   # yellow text palet
 
 **Do I need to make root's shell zsh (`chsh`)?** No. The hook runs in *your* zsh, just before `sudo` starts, and the watcher reads the pane's processes from outside. The label and text colors belong to the Rex pane, so they stay in place whatever shell root uses (bash, sh, zsh). Changing root's shell wouldn't help anyway. Root's zsh reads root's config, not yours, and `sudo su -` clears `REX_SESSION` and `REX_BLOCK`, which the hook needs to find its pane.
 
-**Remote sessions from aliases or scripts aren't labeled.** The watcher isn't running. Check it with `launchctl print gui/$(id -u)/io.github.nckroy.rex-context-watch | grep state`, look in `~/Library/Logs/rex-context-watch.log`, or run `./install.sh` again.
+**Remote sessions from aliases or scripts aren't labeled.** The watcher isn't running. Check it with `launchctl print gui/$(id -u)/io.github.nckroy.rex-context-watch | grep state`, look in `~/Library/Logs/rex-context-watch.log`, or run `rex-tricks install`.
 
 **My Mac shows up as `🌐` remote.** You've set `REX_LOCAL_HOSTS` but left this Mac out. Add its short hostname (`hostname -s`).
