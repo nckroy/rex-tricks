@@ -2,9 +2,9 @@
 
 Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on macOS.
 
-![A Rex window with six context-coded panes, the work calendar pane and the Claude usage pane. Pane labels read: PROD · kube eks-prod-east, aws acme-prod, dir prod (with the red PROD prompt segment); PROD · ssh db1.prod.example.net; SUDO · port selfupdate; web1.staging.example.net (remote); local · rex-tricks; and PROD · SUDO · dir prod. On the right, the work calendar shows a day of sample meetings above the Claude usage report.](docs/demo.png)
+![A Rex window in three columns. On the left, two context-coded panes: one labeled PROD · kube eks-prod-east, aws acme-prod, dir prod, with red text and the red ⚠ PROD prompt segment, and one labeled SUDO · port selfupdate. In the middle, the Obsidian vault pane shows a sample daily note in emeraldian. On the right, the work calendar shows a day of sample meetings above btop and the Claude usage report.](docs/demo.png)
 
-*Left to right, top to bottom: a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, SSH to a production host, a `sudo` command, SSH to a non-production host, an ordinary local pane, and `sudo` inside a production directory. On the right are the [work calendar](docs/work-calendar.md), showing made-up meetings from its `--demo` mode, and the [Claude usage pane](docs/claude-usage-pane.md) below it. Host names are examples.*
+*Left: two [context-coded panes](docs/context-coded-panes.md), a production kube/AWS/directory context with red text and the `⚠ PROD` prompt segment, and a `sudo` command. Middle: the [Obsidian vault pane](docs/vault-pane.md) on a sample vault. Right: the column the Claude Code hook opens beside Claude, with the [work calendar](docs/work-calendar.md) showing made-up meetings from its `--demo` mode, btop sized to its 24-row minimum, and the [Claude usage pane](docs/claude-usage-pane.md). Host names are examples.*
 
 ## Add-ons
 
