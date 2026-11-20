@@ -26,6 +26,7 @@ Small add-ons for the [Rex](https://www.superlogical.com/rex/docs) terminal on m
 ### Claude usage pane
 
 - Opens to the right of Claude Code whenever you start `claude` in Rex, and refreshes every 30 seconds.
+- Adds a `btop` system monitor above the report when btop is installed.
 - Shows this session's tokens, cache hit rate, models, subagents and output by hour.
 - Shows context size and growth, with likely compactions.
 - Shows the current 5-hour window, with time left and per-session totals.
