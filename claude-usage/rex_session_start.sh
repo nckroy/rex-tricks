@@ -36,7 +36,9 @@ if bt=$(command -v btop || { [[ -x /opt/homebrew/bin/btop ]] && echo /opt/homebr
     # cpu/mem/net/proc boxes). If the proportions above leave it shorter, take rows from the
     # usage pane, then the calendar, keeping each at least REX_PANE_MIN_ROWS. Rows don't map
     # exactly to ratios (each pane has a label bar), so measure, resize and measure again.
-    python3 -I - "$REX_SESSION" "$T" "$B" "${C:-}" "${REX_BTOP_MIN_ROWS:-24}" "${REX_PANE_MIN_ROWS:-8}" <<'PY' 2>/dev/null
+    # This runs detached: right after Rex starts, the app can take several seconds to lay the
+    # panes out, longer than the hook's 10s timeout leaves. Errors go to $TMPDIR/rex-btop-fit.log.
+    python3 -I - "$REX_SESSION" "$T" "$B" "${C:-}" "${REX_BTOP_MIN_ROWS:-24}" "${REX_PANE_MIN_ROWS:-8}" <<'PY' </dev/null >/dev/null 2>>"${TMPDIR:-/tmp}/rex-btop-fit.log" &!
 import json, subprocess, sys, time
 sess, T, B, C, need, keep = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] or None, int(sys.argv[5]), int(sys.argv[6])
 
@@ -46,7 +48,10 @@ def call(method, args):
     return json.loads(out) if out.strip() else None
 
 def size(b):
-    return call("block.method", {"block_id": b, "method": "size"})
+    try:
+        return call("block.method", {"block_id": b, "method": "size"}) or {}
+    except (subprocess.TimeoutExpired, ValueError):
+        return {}  # the server is busy (e.g. just after a restart); treat as not sized yet
 
 def leaves(node):
     if "split" in node:
@@ -70,15 +75,21 @@ def resize(before, after, ratio):
                                  "after_block_id": after, "ratio": round(min(max(ratio, 0.02), 0.98), 4)})
 
 # Until the app lays a pane out, it reports a default 80x24 with no owner, which would pass
-# for big enough. Wait for real sizes; with no app showing the window there's nothing to fit.
+# for big enough. Wait for real sizes, then for them to settle (the app may resize the panes
+# more than once while it lays the window out). After a cold start of Rex that took ~8s;
+# allow 30. With no app showing the window there's nothing to fit.
 col = [x for x in (C, T, B) if x]
-for _ in range(20):
-    if all(size(x)["owner"] for x in col):
+deadline = time.time() + 30
+prev = None
+while True:
+    s = [size(x) for x in col]
+    cur = [(x.get("rows"), x.get("columns")) for x in s] if all(x.get("owner") for x in s) else None
+    if cur and cur == prev:
         break
-    time.sleep(0.1)
-else:
-    sys.exit(0)
-time.sleep(0.2)
+    if time.time() > deadline:
+        sys.exit(0)
+    prev = cur
+    time.sleep(0.5)
 
 bump = 0.0
 for _ in range(4):
