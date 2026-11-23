@@ -35,7 +35,7 @@ def term_width():
 
 W = max(40, min(term_width(), 120))
 BAR = max(10, min(40, W - 30))    # hourly output bars
-BAR5 = max(10, min(60, W - 8))    # 5-hour window bar
+BAR5 = max(10, min(60, W - 14))   # 5-hour window time bar (room for " 100% of 5h")
 SPK = max(10, min(40, W - 30))    # context sparkline
 MODW = max(12, min(28, W - 52))   # model-name column
 NO_COLOR = bool(os.environ.get("NO_COLOR"))
@@ -204,11 +204,12 @@ def spark(series, width=40):
     return "".join(SPARK[min(7, int(v / hi * 7))] for v in pts)
 
 
-def bar(frac, width=40):
+def time_bar(frac, width=40):
+    # Clock time through the window, NOT usage. Kept a neutral color on purpose: green/yellow/red
+    # made a window that was 95% over in time read as "95% of the limit used".
     frac = min(max(frac, 0), 1)
     n = int(round(frac * width))
-    col = "32" if frac < 0.5 else ("33" if frac < 0.8 else "31")
-    return c(col, "█" * n) + DIM("░" * (width - n))
+    return c("90", "█" * n) + DIM("░" * (width - n))
 
 
 entries = load()
@@ -316,7 +317,8 @@ if active:
     frac = el / timedelta(hours=5)
     print("  " + LBL("Window:") + " " + NUM(loc(start)) + " → " + NUM(loc(end)) + "   " + LBL("elapsed ") + NUM(hm(el))
           + DIM(" · ") + LBL("remaining ") + c("1;32" if rem > timedelta(hours=1) else "1;31", hm(rem)))
-    print("  " + bar(frac, BAR5) + " " + NUM(f"{frac:.0%}"))
+    print("  " + LBL("Time through window ") + DIM("(not usage; /usage has your limit)"))
+    print("  " + time_bar(frac, BAR5) + " " + NUM(f"{frac:.0%}") + DIM(" of 5h"))
     t = tot(active["items"])
     print(table(t))
     mins = max(1, (active["items"][-1]["t"] - active["items"][0]["t"]).total_seconds() / 60)

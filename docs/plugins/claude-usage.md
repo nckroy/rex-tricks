@@ -6,7 +6,7 @@ When you start [Claude Code](https://claude.com/claude-code) in a Rex pane, this
 
 - **This session:** span, requests, uncached input, cache writes and reads, output (and thinking), total tokens, cache hit rate, usage by model, subagent requests, output by hour and the largest context additions.
 - **Context:** the tokens the latest main-thread request carried, the peak and starting size, likely compactions (a drop of more than half), and a sparkline of growth over the session.
-- **Current 5-hour window:** start, end, elapsed and remaining time with a progress bar, totals for every session in the window, output and new-input rates, and a per-session list with each session's current context.
+- **Current 5-hour window:** start, end, elapsed and remaining time with a bar showing how far through the 5 hours the window is (time, not usage), totals for every session in the window, output and new-input rates, and a per-session list with each session's current context.
 
 ## When it opens
 
